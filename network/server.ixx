@@ -27,7 +27,7 @@ module;
 #include <set>
 #include <vector>
 
-module network.server;
+export module nogo.network.server;
 
 using asio::awaitable;
 using asio::co_spawn;
@@ -36,24 +36,24 @@ using asio::redirect_error;
 using asio::use_awaitable;
 using asio::ip::tcp;
 
-class participant {
+class Participant {
 public:
-    virtual ~participant() { }
+    virtual ~Participant() { }
     virtual void deliver(const std::string& msg) = 0;
 };
 
-typedef std::shared_ptr<participant> participant_ptr;
+typedef std::shared_ptr<Participant> Participant_ptr;
 
-class room {
+class Room {
 public:
-    void join(participant_ptr participant)
+    void join(Participant_ptr participant)
     {
         participants_.insert(participant);
         for (auto msg : recent_msgs_)
             participant->deliver(msg);
     }
 
-    void leave(participant_ptr participant)
+    void leave(Participant_ptr participant)
     {
         participants_.erase(participant);
     }
@@ -69,16 +69,16 @@ public:
     }
 
 private:
-    std::set<participant_ptr> participants_;
+    std::set<Participant_ptr> participants_;
     enum { max_recent_msgs = 100 };
     std::deque<std::string> recent_msgs_;
 };
 
-class session
-    : public participant,
-      public std::enable_shared_from_this<session> {
+class Session
+    : public Participant,
+      public std::enable_shared_from_this<Session> {
 public:
-    session(tcp::socket socket, room& room)
+    Session(tcp::socket socket, Room& room)
         : socket_(std::move(socket))
         , timer_(socket_.get_executor())
         , room_(room)
@@ -150,16 +150,16 @@ private:
 
     tcp::socket socket_;
     asio::steady_timer timer_;
-    room& room_;
+    Room& room_;
     std::deque<std::string> write_msgs_;
 };
 
 awaitable<void> listener(tcp::acceptor acceptor)
 {
-    room room;
+    Room room;
 
     for (;;) {
-        std::make_shared<session>(
+        std::make_shared<Session>(
             co_await acceptor.async_accept(use_awaitable),
             room)
             ->start();

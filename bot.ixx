@@ -1,7 +1,7 @@
-export module Bot;
+export module nogo.bot;
 
+import nogo.rule;
 import std;
-import Rule;
 
 using namespace std;
 using namespace std::chrono;

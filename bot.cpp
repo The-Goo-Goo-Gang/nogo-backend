@@ -1,4 +1,4 @@
-import Bot;
+import nogo.bot;
 
 int main()
 {

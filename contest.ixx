@@ -1,7 +1,7 @@
-export module contest;
+export module nogo.contest;
 
+import nogo.rule;
 import std;
-import Rule;
 
 using namespace std;
 namespace fs = std::filesystem;

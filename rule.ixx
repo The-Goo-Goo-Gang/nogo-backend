@@ -1,4 +1,4 @@
-export module rule;
+export module nogo.rule;
 
 import std;
 

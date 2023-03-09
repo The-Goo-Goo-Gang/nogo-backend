@@ -1,4 +1,4 @@
-export module network;
+export module nogo.network;
 
-export import network.data;
-export import network.server;
+export import nogo.network.data;
+export import nogo.network.server;

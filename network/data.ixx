@@ -3,7 +3,7 @@ module;
 #include <nlohmann/json.hpp>
 #include <string>
 
-export module network.data;
+export module nogo.network.data;
 
 using nlohmann::json;
 using std::string;
@@ -43,7 +43,7 @@ public:
     {
     }
 
-    operator std::string()
+    operator string()
     {
         return j_object_.dump();
     }

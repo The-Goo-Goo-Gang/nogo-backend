@@ -1,8 +1,6 @@
-import network;
-import Contest;
-import <iostream>;
-import <vector>;
-import <ranges>;
+import nogo.network;
+import nogo.contest;
+import std;
 
 int main(int argc, char* argv[])
 {
