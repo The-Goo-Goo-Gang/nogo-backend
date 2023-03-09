@@ -70,7 +70,6 @@ MCTSNode* tree_policy(MCTSNode* node, double C)
     return node;
 }
 
-
 std::mt19937 rng(std::random_device {}());
 std::uniform_real_distribution<double> dist(0, 1);
 

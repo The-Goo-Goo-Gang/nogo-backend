@@ -1,4 +1,4 @@
-export module Rule;
+export module rule;
 
 import std;
 
@@ -16,8 +16,11 @@ export struct Position {
     {
     }
 
-    constexpr Position(): Position(-1){}
-    
+    constexpr Position()
+        : Position(-1)
+    {
+    }
+
     constexpr Position& operator+=(Position p)
     {
         x += p.x, y += p.y;
@@ -41,7 +44,7 @@ export struct Position {
     constexpr auto operator<=>(const Position& p) const = default;
 };
 
-export class BoardType {
+export class Board {
     std::array<int, rank_n * rank_n> arr;
 
 public:
@@ -61,7 +64,7 @@ public:
 
     static constexpr std::array delta { Position { -1, 0 }, Position { 1, 0 }, Position { 0, -1 }, Position { 0, 1 } };
 
-    constexpr auto _liberties(Position p, BoardType& visit) const -> bool
+    constexpr auto _liberties(Position p, Board& visit) const -> bool
     {
         auto self = *this;
         visit[p] = true;
@@ -74,7 +77,7 @@ public:
     constexpr bool liberties(Position p) const
     {
         auto self = *this;
-        BoardType visit {};
+        Board visit {};
         return self._liberties(p, visit);
     }
 
@@ -94,12 +97,12 @@ public:
     }
 };
 
-export struct RoleType {
+export struct Role {
     enum Value {
         WHITE = -1,
         BLACK = 1
     };
-    constexpr RoleType(Value value)
+    constexpr Role(Value value)
         : value(value)
     {
     }
@@ -116,7 +119,7 @@ export struct RoleType {
         auto& self = *this;
         self = self ? WHITE : BLACK;
     }
-    friend std::ostream& operator<<(std::ostream& out, RoleType role)
+    friend std::ostream& operator<<(std::ostream& out, Role role)
     {
         return out << (role ? "BLACK" : "WHITE");
     }
@@ -127,11 +130,11 @@ private:
 
 export class State {
 public:
-    BoardType board {};
+    Board board {};
     std::vector<Position> moves {};
-    RoleType role;
+    Role role;
 
-    constexpr State(RoleType role = RoleType::BLACK)
+    constexpr State(Role role = Role::BLACK)
         : role(role)
     {
     }
@@ -171,7 +174,7 @@ public:
     constexpr std::vector<Position> available_actions() const
     {
         auto temp_board { board };
-        return BoardType::index() | std::ranges::views::filter([&temp_board, this](auto Position) {
+        return Board::index() | std::ranges::views::filter([&temp_board, this](auto Position) {
             if (temp_board[Position])
                 return false;
             temp_board[Position] = this->role;

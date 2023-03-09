@@ -2,5 +2,4 @@ import Bot;
 
 int main()
 {
-    
 }

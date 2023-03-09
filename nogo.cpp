@@ -1,6 +1,8 @@
 import network;
 import Contest;
-import std;
+import <iostream>;
+import <vector>;
+import <ranges>;
 
 int main(int argc, char* argv[])
 {

@@ -1,4 +1,4 @@
-export module Contest;
+export module contest;
 
 import std;
 import Rule;
