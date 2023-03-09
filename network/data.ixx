@@ -1,13 +1,12 @@
 module;
 
 #include <nlohmann/json.hpp>
-
-#include <stdexcept>
 #include <string>
 
 export module network.data;
 
 using nlohmann::json;
+using std::string;
 
 export enum class OPCODE : int {
     READY_OP = 200000,
@@ -21,34 +20,31 @@ export enum class OPCODE : int {
     CHAT_OP,
 };
 
-export class invalid_message : public std::runtime_error {
-    using runtime_error::runtime_error;
-};
+export class message {
+    json j_object_;
 
-export struct NetworkData {
+public:
     OPCODE op;
-    std::string data1;
-    std::string data2;
+    string data1;
+    string data2;
 
-    NetworkData(std::string message)
+    message(OPCODE op, string data1, string data2)
+        : j_object_ { { "op", op }, { "data1", data1 }, { "data2", data2 } }
+        , op(op)
+        , data1(data1)
+        , data2(data2)
     {
-        try {
-            json doc = json::parse(message);
-            this->op = static_cast<OPCODE>(doc["op"].get<int>());
-            this->data1 = doc["data1"].get<std::string>();
-            this->data2 = doc["data2"].get<std::string>();
-        } catch (json::parse_error& e) {
-            throw invalid_message(message);
-        }
     }
-    std::string encode() const
+    message(string msg)
+        : j_object_(json::parse(msg))
+        , op(static_cast<OPCODE>(j_object_["op"].get<int>()))
+        , data1(j_object_["data1"].get<string>())
+        , data2(j_object_["data2"].get<string>())
     {
-        auto self = *this;
-        nlohmann::json j_object = {
-            { "op", static_cast<int>(self.op) },
-            { "data1", self.data1 },
-            { "data2", self.data2 }
-        };
-        return j_object.dump() + "\n";
+    }
+
+    operator std::string()
+    {
+        return j_object_.dump();
     }
 };
