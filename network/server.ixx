@@ -25,9 +25,12 @@ module;
 #include <deque>
 #include <iostream>
 #include <set>
+#include <string>
 #include <vector>
 
 export module nogo.network.server;
+
+import nogo.network.data;
 
 using asio::awaitable;
 using asio::co_spawn;
@@ -39,10 +42,10 @@ using asio::ip::tcp;
 class Participant {
 public:
     virtual ~Participant() { }
-    virtual void deliver(const std::string& msg) = 0;
+    virtual void deliver(Message msg) = 0;
 };
 
-typedef std::shared_ptr<Participant> Participant_ptr;
+export using Participant_ptr = std::shared_ptr<Participant>;
 
 class Room {
 public:
@@ -58,7 +61,7 @@ public:
         participants_.erase(participant);
     }
 
-    void deliver(const std::string& msg)
+    void deliver(Message msg)
     {
         recent_msgs_.push_back(msg);
         while (recent_msgs_.size() > max_recent_msgs)
@@ -71,7 +74,7 @@ public:
 private:
     std::set<Participant_ptr> participants_;
     enum { max_recent_msgs = 100 };
-    std::deque<std::string> recent_msgs_;
+    std::deque<Message> recent_msgs_;
 };
 
 class Session
@@ -101,7 +104,7 @@ public:
             detached);
     }
 
-    void deliver(const std::string& msg)
+    void deliver(Message msg) override
     {
         write_msgs_.push_back(msg);
         timer_.cancel_one();
@@ -115,7 +118,10 @@ private:
                 std::size_t n = co_await asio::async_read_until(socket_,
                     asio::dynamic_buffer(read_msg, 1024), "\n", use_awaitable);
 
-                room_.deliver(read_msg.substr(0, n));
+                Message msg { read_msg.substr(0, n) };
+                // process_data(shared_from_this(), msg);
+                room_.deliver(msg);
+
                 read_msg.erase(0, n);
             }
         } catch (std::exception&) {
@@ -132,7 +138,7 @@ private:
                     co_await timer_.async_wait(redirect_error(use_awaitable, ec));
                 } else {
                     co_await asio::async_write(socket_,
-                        asio::buffer(write_msgs_.front()), use_awaitable);
+                        asio::buffer(static_cast<std::string>(write_msgs_.front())), use_awaitable);
                     write_msgs_.pop_front();
                 }
             }
@@ -151,7 +157,7 @@ private:
     tcp::socket socket_;
     asio::steady_timer timer_;
     Room& room_;
-    std::deque<std::string> write_msgs_;
+    std::deque<Message> write_msgs_;
 };
 
 awaitable<void> listener(tcp::acceptor acceptor)
