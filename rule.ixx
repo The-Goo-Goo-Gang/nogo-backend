@@ -2,6 +2,8 @@ export module nogo.rule;
 
 import std;
 
+namespace ranges = std::ranges;
+
 export constexpr int rank_n = 9;
 
 export struct Position {
@@ -28,7 +30,7 @@ export struct Position {
     }
     constexpr Position operator+(Position p) const
     {
-        Position res = *this;
+        auto res = *this;
         return res += p;
     }
     constexpr Position& operator-=(Position p)
@@ -38,7 +40,7 @@ export struct Position {
     }
     constexpr Position operator-(Position p) const
     {
-        Position res = *this;
+        auto res = *this;
         return res -= p;
     }
     constexpr auto operator<=>(const Position& p) const = default;
@@ -46,6 +48,13 @@ export struct Position {
 
 export class Board {
     std::array<int, rank_n * rank_n> arr;
+
+    // static method with module causes ICE
+    auto neighbor(Position p) const
+    {
+        constexpr std::array delta { Position { -1, 0 }, Position { 1, 0 }, Position { 0, -1 }, Position { 0, 1 } };
+        return delta | std::views::transform([&](auto d) { return p + d; });
+    }
 
 public:
     constexpr int& operator[](Position p) { return arr[p.x * rank_n + p.y]; }
@@ -62,16 +71,15 @@ public:
         return res;
     }
 
-    static constexpr std::array delta { Position { -1, 0 }, Position { 1, 0 }, Position { 0, -1 }, Position { 0, 1 } };
-
     constexpr auto _liberties(Position p, Board& visit) const -> bool
     {
         auto self = *this;
         visit[p] = true;
-        return std::ranges::any_of(delta, [self, p, &visit](auto d) constexpr -> bool {
-            Position n = p + d;
-            return self.in_border(n)
-                && (!self[n] || self[n] == self[p] && !visit[n] && self._liberties(n, visit));
+        return ranges::any_of(neighbor(p), [&](auto n) constexpr {
+            return self.in_border(n) && !self[n];
+        }) || ranges::any_of(neighbor(p), [&](auto n) constexpr -> bool {
+            return self.in_border(n) && !visit[n] && self[n] == self[p]
+                && _liberties(n, visit);
         });
     };
     constexpr bool liberties(Position p) const
@@ -89,8 +97,7 @@ public:
 
         auto self = *this;
         return !self.liberties(p)
-            || std::ranges::any_of(delta, [p, self](auto d) {
-                   Position n = p + d;
+            || std::ranges::any_of(neighbor(p), [&](auto n) {
                    return self.in_border(n) && self[n] == -self[p]
                        && !self.liberties(n);
                });
@@ -173,14 +180,8 @@ public:
     }
     constexpr std::vector<Position> available_actions() const
     {
-        auto temp_board { board };
-        return Board::index() | std::ranges::views::filter([&temp_board, this](auto Position) {
-            if (temp_board[Position])
-                return false;
-            temp_board[Position] = this->role;
-            bool res { !temp_board.is_capturing(Position) };
-            temp_board[Position] = 0;
-            return res;
+        return Board::index() | std::ranges::views::filter([&](auto pos) {
+            return !board[pos] && !next_state(pos).board.is_capturing(pos);
         }) | std::ranges::to<std::vector>();
     }
 };

@@ -8,8 +8,8 @@ int main(int argc, char* argv[])
         std::cerr << "Usage: server <port> [<port> ...]\n";
         return 1;
     }
-    auto ports = std::vector(argv + 1, argc + argv)
+    auto ports = std::ranges::subrange(argv + 1, argv + argc)
         | std::views::transform([](auto s) -> unsigned short { return std::atoi(s); })
         | std::ranges::to<std::vector>();
     launch_server(ports);
-}
+} 
