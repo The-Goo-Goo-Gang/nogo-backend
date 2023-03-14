@@ -1,10 +1,16 @@
+module;
+
+#include <algorithm>
+#include <array>
+#include <iostream>
+// #include <range/v3/all.hpp>
+#include <ranges>
+#include <vector>
+
 export module nogo.rule;
 
-import std;
-
 namespace ranges = std::ranges;
-
-export constexpr int rank_n = 9;
+export constexpr inline auto rank_n = 9;
 
 export struct Position {
     int x, y;
@@ -43,20 +49,23 @@ export struct Position {
         auto res = *this;
         return res -= p;
     }
+
+    constexpr operator bool() const { return x >= 0 && y >= 0; }
     constexpr auto operator<=>(const Position& p) const = default;
 };
 
 export class Board {
     std::array<int, rank_n * rank_n> arr;
 
-    // static method with module causes ICE
-    auto neighbor(Position p) const
+    // static method with module causes ICE, fuck Visual C++!
+    constexpr auto neighbor(Position p) const
     {
         constexpr std::array delta { Position { -1, 0 }, Position { 1, 0 }, Position { 0, -1 }, Position { 0, 1 } };
         return delta | std::views::transform([&](auto d) { return p + d; });
     }
 
 public:
+    // constexpr auto operator[](this auto&& p) { return arr[p.x * rank_n + p.y]; }
     constexpr int& operator[](Position p) { return arr[p.x * rank_n + p.y]; }
     constexpr int operator[](Position p) const { return arr[p.x * rank_n + p.y]; }
 
@@ -77,7 +86,7 @@ public:
         visit[p] = true;
         return ranges::any_of(neighbor(p), [&](auto n) constexpr {
             return self.in_border(n) && !self[n];
-        }) || ranges::any_of(neighbor(p), [&](auto n) constexpr -> bool {
+        }) || ranges::any_of(neighbor(p), [&](auto n) constexpr {
             return self.in_border(n) && !visit[n] && self[n] == self[p]
                 && _liberties(n, visit);
         });
@@ -113,14 +122,8 @@ export struct Role {
         : value(value)
     {
     }
-    constexpr operator int() const
-    {
-        return value;
-    }
-    constexpr explicit operator bool() const
-    {
-        return value == BLACK;
-    }
+    constexpr operator int() const { return value; }
+    constexpr explicit operator bool() const { return value == BLACK; }
     constexpr void reverse()
     {
         auto& self = *this;
@@ -135,53 +138,42 @@ private:
     Value value;
 };
 
-export class State {
-public:
-    Board board {};
-    std::vector<Position> moves {};
+export struct State {
+    Board board;
     Role role;
+    Position last_move;
 
     constexpr State(Role role = Role::BLACK)
         : role(role)
     {
     }
-
-    constexpr State next_state(Position p) const
+    State(Board board, Role role, Position last_move)
+        : board(board)
+        , role(role)
+        , last_move(last_move)
     {
-        // assert(!board[p]);
-        auto self = *this;
+    }
 
-        auto state { self };
-        state.board[p] = state.role;
-        state.moves.push_back(p);
-        state.role.reverse();
+    auto next_state(Position p) const
+    {
+        State state { board, Role::Value(-role), p };
+        state.board[p] = role;
         return state;
     }
 
-    constexpr Position revoke()
+    constexpr auto available_actions() const
     {
-        if (!moves.size())
-            return {};
-
-        auto p { moves.back() };
-        moves.pop_back();
-        board[p] = 0;
-        role.reverse();
-        return p;
+        return Board::index() | std::ranges::views::filter([&](auto pos) {
+            return !board[pos] && !next_state(pos).board.is_capturing(pos);
+        }) | ranges::to<std::vector>();
     }
 
-    constexpr int is_over() const
+    constexpr auto is_over() const -> int
     {
-        if (moves.size() && board.is_capturing(moves.back())) // win
+        if (last_move && board.is_capturing(last_move)) // win
             return role;
         if (!available_actions().size()) // lose
             return -role;
         return 0;
-    }
-    constexpr std::vector<Position> available_actions() const
-    {
-        return Board::index() | std::ranges::views::filter([&](auto pos) {
-            return !board[pos] && !next_state(pos).board.is_capturing(pos);
-        }) | std::ranges::to<std::vector>();
     }
 };
