@@ -54,8 +54,37 @@ export struct Position {
     constexpr auto operator<=>(const Position& p) const = default;
 };
 
+export class Role {
+    int id;
+    constexpr explicit Role(int id)
+        : id(id)
+    {
+    }
+
+public:
+    static const Role BLACK, WHITE, NONE;
+
+    constexpr Role()
+        : Role(0)
+    {
+    }
+    constexpr auto map(auto f_black, auto f_white) const
+    {
+        if (*this == BLACK)
+            return f_black();
+        else if (*this == WHITE)
+            return f_white();
+        else
+            throw std::runtime_error("invalid role");
+    }
+    constexpr auto operator<=>(const Role&) const = default;
+    constexpr auto operator-() const { return Role(-id); }
+    constexpr operator bool() { return id; }
+};
+constexpr Role Role::BLACK { 1 }, Role::WHITE { -1 }, Role::NONE { 0 };
+
 export class Board {
-    std::array<int, rank_n * rank_n> arr;
+    std::array<Role, rank_n * rank_n> arr;
 
     // static method with module causes ICE, fuck Visual C++!
     constexpr auto neighbor(Position p) const
@@ -66,8 +95,8 @@ export class Board {
 
 public:
     // constexpr auto operator[](this auto&& p) { return arr[p.x * rank_n + p.y]; }
-    constexpr int& operator[](Position p) { return arr[p.x * rank_n + p.y]; }
-    constexpr int operator[](Position p) const { return arr[p.x * rank_n + p.y]; }
+    constexpr auto operator[](Position p) -> Role& { return arr[p.x * rank_n + p.y]; }
+    constexpr auto operator[](Position p) const { return arr[p.x * rank_n + p.y]; }
 
     constexpr bool in_border(Position p) const { return p.x >= 0 && p.y >= 0 && p.x < rank_n && p.y < rank_n; }
 
@@ -83,10 +112,10 @@ public:
     constexpr auto _liberties(Position p, Board& visit) const -> bool
     {
         auto self = *this;
-        visit[p] = true;
-        return ranges::any_of(neighbor(p), [&](auto n) constexpr {
+        visit[p] = Role::BLACK;
+        return std::ranges::any_of(neighbor(p), [&](auto n) constexpr {
             return self.in_border(n) && !self[n];
-        }) || ranges::any_of(neighbor(p), [&](auto n) constexpr {
+        }) || std::ranges::any_of(neighbor(p), [&](auto n) constexpr {
             return self.in_border(n) && !visit[n] && self[n] == self[p]
                 && _liberties(n, visit);
         });
@@ -113,31 +142,6 @@ public:
     }
 };
 
-export struct Role {
-    enum Value {
-        WHITE = -1,
-        BLACK = 1
-    };
-    constexpr Role(Value value)
-        : value(value)
-    {
-    }
-    constexpr operator int() const { return value; }
-    constexpr explicit operator bool() const { return value == BLACK; }
-    constexpr void reverse()
-    {
-        auto& self = *this;
-        self = self ? WHITE : BLACK;
-    }
-    friend std::ostream& operator<<(std::ostream& out, Role role)
-    {
-        return out << (role ? "BLACK" : "WHITE");
-    }
-
-private:
-    Value value;
-};
-
 export struct State {
     Board board;
     Role role;
@@ -156,24 +160,24 @@ export struct State {
 
     auto next_state(Position p) const
     {
-        State state { board, Role::Value(-role), p };
+        State state { board, -role, p };
         state.board[p] = role;
         return state;
     }
 
-    constexpr auto available_actions() const
+    auto available_actions() const
     {
         return Board::index() | std::ranges::views::filter([&](auto pos) {
             return !board[pos] && !next_state(pos).board.is_capturing(pos);
         }) | ranges::to<std::vector>();
     }
 
-    constexpr auto is_over() const -> int
+    constexpr auto is_over() const
     {
         if (last_move && board.is_capturing(last_move)) // win
             return role;
         if (!available_actions().size()) // lose
             return -role;
-        return 0;
+        return Role::NONE;
     }
 };
