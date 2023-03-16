@@ -3,13 +3,17 @@ module;
 #include <algorithm>
 #include <array>
 #include <iostream>
-// #include <range/v3/all.hpp>
 #include <ranges>
 #include <vector>
 
+#ifdef __GNUC__
+#include <range/v3/all.hpp>
+#else
+namespace ranges = std::ranges;
+#endif
+
 export module nogo.rule;
 
-namespace ranges = std::ranges;
 export constexpr inline auto rank_n = 9;
 
 export struct Position {
