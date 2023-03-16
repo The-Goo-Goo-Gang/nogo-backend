@@ -1,8 +1,11 @@
+#include <iostream>
+#include <ranges>
+#include <vector>
+
 import nogo.network;
 import nogo.contest;
-import std;
 
-int main(int argc, char* argv[])
+auto main(int argc, char* argv[]) -> int
 {
     if (argc < 2) {
         std::cerr << "Usage: server <port> [<port> ...]\n";
@@ -12,4 +15,4 @@ int main(int argc, char* argv[])
         | std::views::transform([](auto s) -> unsigned short { return std::atoi(s); })
         | std::ranges::to<std::vector>();
     launch_server(ports);
-} 
+}
