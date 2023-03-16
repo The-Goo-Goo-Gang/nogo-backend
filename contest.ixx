@@ -1,53 +1,75 @@
+module;
+
+#include <algorithm>
+#include <cctype>
+#include <map>
+#include <ranges>
+#include <stdexcept>
+#include <vector>
+
 export module nogo.contest;
 
 import nogo.rule;
-import std;
+import nogo.network.data;
 
 using namespace std;
-namespace fs = std::filesystem;
 namespace ranges = std::ranges;
 
-/*
-// A shortcut to the result type of F(Args...).
-template <typename F, typename... Args>
-using result_t = std::invoke_result_t<std::decay_t<F>,(std::decay_t<Args>...)>;
-*/
+class Participant {
+public:
+    virtual ~Participant()
+    {
+    }
+    virtual void deliver(Message msg) = 0;
+    virtual auto operator<=>(const Session&) const = 0;
+};
+// bool is_evil { false };
+// bool is_local { false };
 
-// A shortcut to the type of a duration D.
-template <typename D>
-using duration_t = std::chrono::duration<
-    typename D::rep, typename D::period>;
+export using Participant_ptr = std::shared_ptr<Participant>;
 
-// Run a function asynchronously if timeout is non-zero.
-//
-// The return value is an optional<result_t>.
-// The optional is "empty" if the async execution timed out.
-template <typename TO, typename F, typename... Args>
-inline auto with_timeout(const TO& timeout, F&& f, Args&&... args)
-{
-    if (timeout == duration_t<TO>::zero())
-        return std::optional { f(args...) };
+export struct Player {
+    Participant_ptr participant;
+    Role role;
+    std::string name;
+    auto operator<=>(const Player&) const = default;
 
-    // std::printf("launching...\n");
-    auto future = std::async(std::launch::async,
-        std::forward<F>(f), std::forward<Args...>(args...));
-    auto status = future.wait_for(timeout);
+    auto name_valid()
+    {
+        return !name.empty() && ranges::all_of(name, [](auto c) { return std::isalnum(c) || c == '_'; });
+    }
+    auto map(auto v_black, auto v_white) const { return role.map(v_black, v_white); }
+    auto empty() const { return !participant; }
+};
 
-    return status == std::future_status::ready
-        ? std::optional { future.get() }
-        : std::nullopt;
-}
-
-template <typename T>
-inline std::string to_string(const T& value)
-{
-    std::ostringstream ss;
-    ss << value;
-    return ss.str();
-}
+class PlayerCouple {
+    Player player1, player2;
+    auto operator[](Role role) -> Player& { return role.map(player1, player2); }
+    auto operator[](Participant_ptr participant) -> Player&
+    {
+        if (*player1.participant == *participant)
+            return player1;
+        if (*player2.participant == *participant)
+            return player2;
+        throw logic_error("Participant not in couple");
+    }
+    auto insert(Player&& player)
+    {
+        if (!player1.empty() && !player2.empty())
+            throw logic_error("Couple already full");
+        if (contains(player.role))
+            throw logic_error("Role already occupied");
+        player.role.map(player1, player2) = std::move(player);
+    }
+};
 
 export class Contest {
 public:
+    enum class Status {
+        NOT_PREPARED,
+        ON_GOING,
+        GAME_OVER,
+    };
     class StonePositionitionOccupiedException : public std::logic_error {
         using logic_error::logic_error;
     };
@@ -56,34 +78,70 @@ public:
     };
 
     State current {};
-    using PlayerType = function<Position(State)>;
-    PlayerType player1, player2;
-    int winner { 0 };
-    Contest(const PlayerType& player1, const PlayerType& player2)
-        : player1(player1)
-        , player2(player2)
+    std::vector<Position> moves;
+    PlayerCouple players;
+
+    Status status;
+    Role winner;
+
+    void clear()
     {
+        current = State {};
+        moves.clear();
+        players.clear();
+        status = Status {};
+        winner = Role {};
     }
 
-    int round() const
+    void reject(Player player)
     {
-        return (int)current.moves.size();
+        if (status)
+            throw logic_error("Contest already started");
+        players.clear();
     }
 
-    bool play()
+    void register(Player player)
     {
-        auto&& player { current.role ? player1 : player2 };
-        auto p { with_timeout(1000ms, player, current) };
-        if (!p) {
-            winner = -current.role;
-            throw TimeLimitExceededException { to_string(current.role) + " exceeds the time limit." };
-        }
-        if (current.board[*p]) {
-            winner = -current.role;
-            throw StonePositionitionOccupiedException { to_string(current.role) + " choose a occupied Positionition." };
-        }
-        current = current.next_state(*p);
-        winner = current.is_over();
-        return !winner;
+        if (status)
+            throw logic_error("Contest already started");
+
+        players.insert(player);
+
+        if (players.contains(Role::BLACK) && players.contains(Role::WHITE))
+            status = Status::ON_GOING;
     }
+
+    void play(Participant_ptr participant, Position pos)
+    {
+        auto player = players[participant];
+
+        if (status != Status::ON_GOING)
+            throw logic_error("Contest not started");
+        if (current.role != player.role)
+            throw logic_error(to_string(player) + " not allowed to play");
+
+        if (current.board[pos])
+            throw StonePositionitionOccupiedException("Stone positionition occupied");
+
+        current = current.next_state(pos);
+        moves.push_back(pos);
+
+        if (winner = current.is_over())
+            status = Status::GAME_OVER;
+    }
+
+    void concede(Player player)
+    {
+        auto player = players[participant];
+
+        if (status != Status::ON_GOING)
+            throw logic_error("Contest not started");
+        if (players[current.role] != player)
+            throw logic_error(to_string(player) + " not allowed to concede");
+
+        status = Status::GAME_OVER;
+        winner = -player.role;
+    }
+
+    auto round() const { return moves.size(); }
 };
