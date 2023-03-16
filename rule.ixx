@@ -68,14 +68,11 @@ public:
         : Role(0)
     {
     }
-    constexpr auto map(auto f_black, auto f_white) const
+
+    constexpr decltype(auto) map(auto&& v_black, auto&& v_white) const
     {
-        if (*this == BLACK)
-            return f_black();
-        else if (*this == WHITE)
-            return f_white();
-        else
-            throw std::runtime_error("invalid role");
+        return id == 1 ? v_black : id == -1 ? v_white
+                                            : throw std::runtime_error("invalid role");
     }
     constexpr auto operator<=>(const Role&) const = default;
     constexpr auto operator-() const { return Role(-id); }
