@@ -66,7 +66,7 @@ public:
             break;
 
         case OpCode::MOVE_OP:
-            Position pos { data1[0] - 'A', data1[1] - '1' };
+            Position pos { data1[0] - 'A', data1[1] - '1' }; // 11-way board will fail!
             contest.play(participant, pos);
 
             auto player = contest.players[participant];

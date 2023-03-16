@@ -164,7 +164,7 @@ export struct State {
 
     auto available_actions() const
     {
-        return Board::index() | std::ranges::views::filter([&](auto pos) {
+        return Board::index() | std::ranges::views::filter([&](auto pos) -> bool {
             return !board[pos] && !next_state(pos).board.is_capturing(pos);
         }) | ranges::to<std::vector>();
     }
