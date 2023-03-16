@@ -31,6 +31,7 @@ module;
 export module nogo.network.server;
 
 import nogo.network.data;
+import nogo.contest;
 
 using asio::awaitable;
 using asio::co_spawn;
@@ -39,21 +40,79 @@ using asio::redirect_error;
 using asio::use_awaitable;
 using asio::ip::tcp;
 
-class Participant {
-public:
-    virtual ~Participant() { }
-    virtual void deliver(Message msg) = 0;
-};
-
-export using Participant_ptr = std::shared_ptr<Participant>;
-
 class Room {
+    Contest contest;
+    std::deque<std::string> chats;
+
 public:
+    /*
+    建立连接成功时，客户端是请求对局方，也就是服务端在收到客户端任何通信前不与客户端进行交流。
+    对局结束后，或暂时拒绝后，想再来一局（重发）的是请求对局方。另外，如果已经收到对方想再来一局了，程序应该阻止本方重复发送请求，而引导先接受或拒绝。你可以不处理因信息传输导致的同时发送，你可以假设不存在这种情况。
+    */
+    void process_data(Message msg, Participant_ptr participant)
+    {
+        string_view data1 { msg.data1 }, data2 { msg.data2 };
+
+        switch (msg.op) {
+        case OpCode::READY_OP:
+            Role role { data == "b" ? BLACK : data == "w" ? WHITE
+                                                          : NONE }; // or strict?
+            Player player { participant, data1, role };
+            contest.register(player);
+            break;
+
+        case OpCode::REJECT_OP:
+            contest.reject();
+            break;
+
+        case OpCode::MOVE_OP:
+            Position pos { data1[0] - 'A', data1[1] - '1' };
+            contest.play(participant, pos);
+
+            auto player = contest.players[participant];
+            auto opposite = -player;
+
+            if (contest.winner == opposite.role) {
+                participant.deliver({ OpCode::SUICIDE_END_OP });
+                room.deliver(participant, msg); // broadcast
+            } else if (contest.winner == player.role) {
+                participant.deliver({ OpCode::GIVEUP_OP });
+                opposite.deliver({ OpCode::GIVEUP_END_OP }); // radical
+            }
+            break;
+
+        case OpCode::GIVEUP_OP:
+            contest.concede(participant);
+            break;
+
+        case OpCode::TIMEOUT_END_OP:
+        case OpCode::SUICIDE_END_OP:
+        case OpCode::GIVEUP_END_OP:
+            // should not receive this code
+            // game over signal should send by me
+            // the evil client must be wrong
+            break;
+
+        case OpCode::LEAVE_OP:
+            participant.stop();
+            break;
+
+        case OpCode::CHAT_OP:
+            recent_msgs_.push_back(msg);
+            while (recent_msgs_.size() > max_recent_msgs)
+                recent_msgs_.pop_front();
+
+            for (auto participant : participants_)
+                participant->deliver(msg);
+            break;
+        }
+    }
     void join(Participant_ptr participant)
     {
         participants_.insert(participant);
-        for (auto msg : recent_msgs_)
+        for (auto msg : recent_msgs_) {
             participant->deliver(msg);
+        }
     }
 
     void leave(Participant_ptr participant)
@@ -61,8 +120,10 @@ public:
         participants_.erase(participant);
     }
 
-    void deliver(Message msg)
+    void deliver(Message msg, Participant_ptr participant)
     {
+        process_data(msg, participant);
+
         recent_msgs_.push_back(msg);
         while (recent_msgs_.size() > max_recent_msgs)
             recent_msgs_.pop_front();
@@ -77,10 +138,10 @@ private:
     std::deque<Message> recent_msgs_;
 };
 
-class Session
-    : public Participant,
-      public std::enable_shared_from_this<Session> {
+class Session : public Participant, public std::enable_shared_from_this<Session> {
 public:
+    auto operator<=>(const Session&) const = default;
+
     Session(tcp::socket socket, Room& room)
         : socket_(std::move(socket))
         , timer_(socket_.get_executor())
@@ -94,14 +155,10 @@ public:
         room_.join(shared_from_this());
 
         co_spawn(
-            socket_.get_executor(),
-            [self = shared_from_this()] { return self->reader(); },
-            detached);
+            socket_.get_executor(), [self = shared_from_this()] { return self->reader(); }, detached);
 
         co_spawn(
-            socket_.get_executor(),
-            [self = shared_from_this()] { return self->writer(); },
-            detached);
+            socket_.get_executor(), [self = shared_from_this()] { return self->writer(); }, detached);
     }
 
     void deliver(Message msg) override
@@ -115,12 +172,10 @@ private:
     {
         try {
             for (std::string read_msg;;) {
-                std::size_t n = co_await asio::async_read_until(socket_,
-                    asio::dynamic_buffer(read_msg, 1024), "\n", use_awaitable);
+                std::size_t n = co_await asio::async_read_until(socket_, asio::dynamic_buffer(read_msg, 1024), "\n", use_awaitable);
 
                 Message msg { read_msg.substr(0, n) };
-                // process_data(shared_from_this(), msg);
-                room_.deliver(msg);
+                room_.deliver(msg, shared_from_this());
 
                 read_msg.erase(0, n);
             }
@@ -137,8 +192,8 @@ private:
                     asio::error_code ec;
                     co_await timer_.async_wait(redirect_error(use_awaitable, ec));
                 } else {
-                    co_await asio::async_write(socket_,
-                        asio::buffer(static_cast<std::string>(write_msgs_.front())), use_awaitable);
+                    co_await asio::async_write(socket_, asio::buffer(static_cast<std::string>(write_msgs_.front())),
+                        use_awaitable);
                     write_msgs_.pop_front();
                 }
             }
@@ -165,10 +220,7 @@ awaitable<void> listener(tcp::acceptor acceptor)
     Room room;
 
     for (;;) {
-        std::make_shared<Session>(
-            co_await acceptor.async_accept(use_awaitable),
-            room)
-            ->start();
+        std::make_shared<Session>(co_await acceptor.async_accept(use_awaitable), room)->start();
     }
 }
 
@@ -178,9 +230,7 @@ export void launch_server(std::vector<asio::ip::port_type> ports)
         asio::io_context io_context(1);
 
         for (auto port : ports) {
-            co_spawn(io_context,
-                listener(tcp::acceptor(io_context, { tcp::v4(), port })),
-                detached);
+            co_spawn(io_context, listener(tcp::acceptor(io_context, { tcp::v4(), port })), detached);
         }
 
         asio::signal_set signals(io_context, SIGINT, SIGTERM);
