@@ -2,6 +2,7 @@ module;
 
 #include <algorithm>
 #include <cctype>
+#include <compare>
 #include <map>
 #include <ranges>
 #include <stdexcept>
@@ -44,6 +45,11 @@ export struct Player {
 
 struct PlayerCouple {
     Player player1, player2;
+    auto contains(Role role) const { return role.map(player1, player2).participant; }
+    auto contians(Participant_ptr participant) const
+    {
+        return *player1.participant == *participant || *player2.participant == *participant;
+    }
     auto operator[](Role role) -> Player& { return role.map(player1, player2); }
     auto operator[](Participant_ptr participant) -> Player&
     {
@@ -53,15 +59,6 @@ struct PlayerCouple {
             return player2;
         throw logic_error("Participant not in couple");
     }
-    auto contains(Role role) const
-    {
-        return role.map(player1, player2).empty();
-    }
-    auto contains(Participant_ptr participant) const
-    {
-        return player1.participant && *player1.participant == *participant
-            || player2.participant && *player2.participant == *participant;
-    }
     auto insert(Player&& player)
     {
         if (!player1.empty() && !player2.empty())
@@ -70,7 +67,11 @@ struct PlayerCouple {
             throw logic_error("Role already occupied");
         player.role.map(player1, player2) = std::move(player);
     }
-    void clear() { player1 = player2 = Player {}; }
+    auto clear()
+    {
+        player1 = Player {};
+        player2 = Player {};
+    }
 };
 
 export class Contest {

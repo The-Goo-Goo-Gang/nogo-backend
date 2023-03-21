@@ -9,3 +9,6 @@ build/
 vsxmake2022/
 
 *.ifc
+
+# else
+note/
