@@ -173,8 +173,10 @@ export struct State {
     {
         if (last_move && board.is_capturing(last_move)) // win
             return role;
+        /*
         if (!available_actions().size()) // lose
             return -role;
+        */
         return Role::NONE;
     }
 };
