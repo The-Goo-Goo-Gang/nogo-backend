@@ -2,8 +2,8 @@
 #include <ranges>
 #include <vector>
 
-import nogo.network;
-import nogo.contest;
+#include "network.hpp"
+#include "contest.hpp"
 
 auto main(int argc, char* argv[]) -> int
 {

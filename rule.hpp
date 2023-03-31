@@ -1,13 +1,11 @@
-module;
+#pragma once
+#define export
 
 #include <algorithm>
 #include <array>
 #include <iostream>
-// #include <range/v3/all.hpp>
 #include <ranges>
 #include <vector>
-
-export module nogo.rule;
 
 namespace ranges = std::ranges;
 export constexpr inline auto rank_n = 9;
