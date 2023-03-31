@@ -1,4 +1,5 @@
-module;
+#pragma once
+#define export
 
 #include <algorithm>
 #include <array>
@@ -11,8 +12,6 @@ module;
 #else
 namespace ranges = std::ranges;
 #endif
-
-export module nogo.rule;
 
 export constexpr inline auto rank_n = 9;
 
