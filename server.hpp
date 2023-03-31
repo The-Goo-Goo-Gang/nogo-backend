@@ -54,10 +54,18 @@ public:
         string_view data1 { msg.data1 }, data2 { msg.data2 };
 
         switch (msg.op) {
+        case OpCode::START_LOCAL_GAME_OP: {
+            // TODO
+            Player player1 { participant, "BLACK", Role::BLACK, Player::PlayerType::LOCAL_HUMAN },
+                player2 { participant, "WHITE", Role::WHITE, Player::PlayerType::LOCAL_HUMAN };
+            contest.enroll(player1), contest.enroll(player2);
+            break;
+        }
+
         case OpCode::READY_OP: {
             Role role { data2 == "b" ? Role::BLACK : data2 == "w" ? Role::WHITE
-                                                          : Role::NONE }; // or strict?
-            Player player { participant, data1, role };
+                                                                  : Role::NONE }; // or strict?
+            Player player { participant, data1, role, Player::PlayerType::REMOTE_HUMAN };
             contest.enroll(player);
             break;
         }
@@ -67,22 +75,28 @@ public:
         }
         case OpCode::MOVE_OP: {
             Position pos { data1[0] - 'A', data1[1] - '1' }; // 11-way board will fail!
-            contest.play(participant, pos);
+            auto role { data2 == "b" ? Role::BLACK : data2 == "w" ? Role::WHITE
+                                                                  : Role::NONE };
 
-            auto player = contest.players[participant];
-            auto opposite = contest.players[-player.role];
+            auto player { contest.players[{participant, role}] };
+            auto opponent = contest.players[-player.role];
 
-            if (contest.winner == opposite.role) {
+            contest.play(player, pos);
+
+            if (contest.winner == opponent.role) {
                 participant->deliver({ OpCode::SUICIDE_END_OP });
                 deliver(msg, participant); // broadcast
             } else if (contest.winner == player.role) {
                 participant->deliver({ OpCode::GIVEUP_OP });
-                opposite.participant->deliver({ OpCode::GIVEUP_END_OP }); // radical
+                opponent.participant->deliver({ OpCode::GIVEUP_END_OP }); // radical
             }
             break;
         }
         case OpCode::GIVEUP_OP: {
-            contest.concede(participant);
+            auto role { data2 == "b" ? Role::BLACK : data2 == "w" ? Role::WHITE
+                                                                  : Role::NONE };
+            auto player { contest.players[{participant, role}]};
+            contest.concede(player);
             break;
         }
         case OpCode::TIMEOUT_END_OP:
