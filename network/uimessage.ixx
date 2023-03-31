@@ -32,32 +32,32 @@ export class UiMessage {
     };
     struct GameMetadata{
         int size;
-        struct Player player_opposing, player_our;
+        Player player_opposing, player_our;
         int turn_timeout;
     };
     struct Game{
-        array<array<int>> chessboard;
+        std::array<std::array<int>> chessboard;
         bool is_our_player_playing;
-        struct GameMetadata gamemetadata;
-        array<DynamicStatistics> statistics;
+        GameMetadata gamemetadata;
+        std::array<DynamicStatistics> statistics;
     };
     struct UiState{
         json data;
         bool is_gaming;
-        struct Game game;
+        Game game;
     };
 
   private:
     json data;
     OpCode op;
     time_t data1;
-    struct UiState data2;
+    UiState data2;
     const Contest& contest;
-    void MakePlayerMessage(auto& player_front,const auto& player_back){
+    void MakePlayerMessage(Player& player_front,const Player& player_back){
         player_front.name = player_back.name;
         player_front.avatar = NULL;
         player_front.type = NULL;
-        player_front.type = (bool)player_back.role;
+        player_front.chess_type = player_back.role.id;
     }
   public:
     void MakeMessage()
