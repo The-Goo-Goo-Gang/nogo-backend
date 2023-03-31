@@ -29,11 +29,23 @@ export struct Player {
     Participant_ptr participant;
     std::string name;
     Role role;
+    enum class PlayerType
+    {
+        LOCAL_HUMAN,
+        REMOTE_HUMAN,
+        BOT,
+    } type;
     Player() = default;
-    Player(Participant_ptr participant, std::string_view name, Role role)
+    Player(Participant_ptr participant, Role role)
+        : participant(participant)
+        , role(role)
+    {
+    }
+    Player(Participant_ptr participant, std::string_view name, Role role, PlayerType type)
         : participant(participant)
         , name(name)
         , role(role)
+        , type(type)
     {
     }
     auto operator<=>(const Player&) const = default;
@@ -56,6 +68,14 @@ struct PlayerCouple {
         if (*player2.participant == *participant)
             return player2;
         throw std::logic_error("Participant not in couple");
+    }
+    auto operator[](Player player) -> Player&
+    {
+        if (player.role == Role::NONE) {
+            return player.participant == player1.participant ? player1 : player2;
+        } else {
+            return player.role.map(player1, player2);
+        }
     }
     auto contains(Role role) const
     {
@@ -129,10 +149,8 @@ public:
             status = Status::ON_GOING;
     }
 
-    void play(Participant_ptr participant, Position pos)
+    void play(Player player, Position pos)
     {
-        auto player = players[participant];
-
         if (status != Status::ON_GOING)
             throw std::logic_error("Contest not started");
         if (current.role != player.role)
@@ -148,10 +166,8 @@ public:
             status = Status::GAME_OVER;
     }
 
-    void concede(Participant_ptr participant)
+    void concede(Player player)
     {
-        auto player = players[participant];
-
         if (status != Status::ON_GOING)
             throw std::logic_error("Contest not started");
         if (players[current.role] != player)
