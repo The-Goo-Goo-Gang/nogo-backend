@@ -80,6 +80,7 @@ public:
     constexpr auto operator<=>(const Role&) const = default;
     constexpr auto operator-() const { return Role(-id); }
     constexpr explicit operator bool() { return id; }
+    friend class UiMessage;
 };
 constexpr Role Role::BLACK { 1 }, Role::WHITE { -1 }, Role::NONE { 0 };
 
@@ -140,6 +141,7 @@ public:
                        && !self.liberties(n);
                });
     }
+    friend class UiMessage;
 };
 
 export struct State {
@@ -177,8 +179,11 @@ export struct State {
     {
         if (last_move && board.is_capturing(last_move)) // win
             return role;
+        /*
         if (!available_actions().size()) // lose
             return -role;
+        */
         return Role::NONE;
     }
+    friend class UiMessage;
 };

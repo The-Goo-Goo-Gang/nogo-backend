@@ -31,6 +31,7 @@
 
 #include "contest.hpp"
 #include "message.hpp"
+#include "uimessage.hpp"
 
 using asio::awaitable;
 using asio::co_spawn;
