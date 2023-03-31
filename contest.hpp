@@ -1,4 +1,5 @@
-module;
+#pragma once
+#define export
 
 #include <algorithm>
 #include <cctype>
@@ -7,10 +8,8 @@ module;
 #include <stdexcept>
 #include <vector>
 
-export module nogo.contest;
-
-import nogo.rule;
-import nogo.network.data;
+#include "rule.hpp"
+#include "data.hpp"
 
 using namespace std;
 namespace ranges = std::ranges;
@@ -21,6 +20,7 @@ public:
     {
     }
     virtual void deliver(Message msg) = 0;
+    virtual void stop() = 0;
     virtual bool operator==(const Participant&) const = 0;
 };
 // bool is_evil { false };
@@ -30,8 +30,15 @@ export using Participant_ptr = std::shared_ptr<Participant>;
 
 export struct Player {
     Participant_ptr participant;
-    Role role;
     std::string name;
+    Role role;
+    Player() = default;
+    Player(Participant_ptr participant, std::string_view name, Role role)
+        : participant(participant)
+        , name(name)
+        , role(role)
+    {
+    }
     auto operator<=>(const Player&) const = default;
 
     auto name_valid()
@@ -71,6 +78,10 @@ struct PlayerCouple {
         player.role.map(player1, player2) = std::move(player);
     }
     void clear() { player1 = player2 = Player {}; }
+    auto opposite(Player player) -> Player&
+    {
+        return player.role.map(player2, player1);
+    }
 };
 
 export class Contest {
@@ -103,7 +114,7 @@ public:
         winner = Role {};
     }
 
-    void reject(Player player)
+    void reject()
     {
         if (status != Status::NOT_PREPARED)
             throw logic_error("Contest already started");

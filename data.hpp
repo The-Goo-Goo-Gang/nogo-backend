@@ -1,9 +1,8 @@
-module;
+#pragma once
+#define export
 
 #include <nlohmann/json.hpp>
 #include <string_view>
-
-export module nogo.network.data;
 
 using nlohmann::json;
 using std::string;
