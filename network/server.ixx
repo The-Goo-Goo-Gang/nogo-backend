@@ -83,6 +83,7 @@ public:
 
         case OpCode::GIVEUP_OP:
             contest.concede(participant);
+            contest.overtime(participant);
             break;
 
         case OpCode::TIMEOUT_END_OP:

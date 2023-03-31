@@ -82,8 +82,8 @@ public:
         GAME_OVER,
     };
     bool should_giveup = false;
-    enum class Win_Type {
-        NULL,
+    enum class WinType {
+        NONE,
         TIMEOUT,
         SUICIDE,
         GIVEUP,
@@ -100,7 +100,7 @@ public:
     PlayerCouple players;
 
     Status status;
-    Win_Type win_type;
+    WinType win_type;
     Role winner;
 
     void clear()
@@ -109,7 +109,7 @@ public:
         moves.clear();
         players.clear();
         status = Status {};
-        win_type = Win_Type{};
+        win_type = WinType{};
         winner = Role {};
         should_giveup = false;
     }
@@ -147,9 +147,10 @@ public:
         current = current.next_state(pos);
         moves.push_back(pos);
 
-        if (winner = current.is_over())
+        if (winner = current.is_over()){
             status = Status::GAME_OVER;
-            win_type = Win_Type::SUICIDE;
+            win_type = WinType::SUICIDE;
+        }
         if(!current.available_actions().size())
             should_giveup = true;
     }
@@ -164,11 +165,11 @@ public:
             throw logic_error(player.name + " not allowed to concede");
 
         status = Status::GAME_OVER;
-        win_type = Win_Type::GIVEUP;
+        win_type = WinType::GIVEUP;
         winner = -player.role;
     }
 
-    void timeout(Participant_ptr participant)
+    void overtime(Participant_ptr participant)
     {
         auto player = players[participant];
         if (status != Status::ON_GOING)
@@ -176,7 +177,7 @@ public:
         if (players[current.role] != player)
             throw logic_error("Not in " + player.name + "'s round");
         status = Status::GAME_OVER;
-        win_type = Win_Type::TIMEOUT;
+        win_type = WinType::TIMEOUT;
         winner = -player.role;
     }
     auto round() const { return moves.size(); }
