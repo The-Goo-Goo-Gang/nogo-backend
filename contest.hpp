@@ -11,9 +11,6 @@
 #include "rule.hpp"
 #include "message.hpp"
 
-using namespace std;
-namespace ranges = std::ranges;
-
 class Participant {
 public:
     virtual ~Participant()
@@ -43,7 +40,7 @@ export struct Player {
 
     auto name_valid()
     {
-        return !name.empty() && ranges::all_of(name, [](auto c) { return std::isalnum(c) || c == '_'; });
+        return !name.empty() && std::ranges::all_of(name, [](auto c) { return std::isalnum(c) || c == '_'; });
     }
     auto map(auto v_black, auto v_white) const { return role.map(v_black, v_white); }
     auto empty() const { return !participant; }
@@ -58,7 +55,7 @@ struct PlayerCouple {
             return player1;
         if (*player2.participant == *participant)
             return player2;
-        throw logic_error("Participant not in couple");
+        throw std::logic_error("Participant not in couple");
     }
     auto contains(Role role) const
     {
@@ -72,9 +69,9 @@ struct PlayerCouple {
     auto insert(Player&& player)
     {
         if (!player1.empty() && !player2.empty())
-            throw logic_error("Couple already full");
+            throw std::logic_error("Couple already full");
         if (contains(player.role))
-            throw logic_error("Role already occupied");
+            throw std::logic_error("Role already occupied");
         player.role.map(player1, player2) = std::move(player);
     }
     void clear() { player1 = player2 = Player {}; }
@@ -92,7 +89,7 @@ public:
         GAME_OVER,
     };
     class StonePositionitionOccupiedException : public std::logic_error {
-        using logic_error::logic_error;
+        using std::logic_error::logic_error;
     };
     class TimeLimitExceededException : public std::runtime_error {
         using runtime_error::runtime_error;
@@ -117,14 +114,14 @@ public:
     void reject()
     {
         if (status != Status::NOT_PREPARED)
-            throw logic_error("Contest already started");
+            throw std::logic_error("Contest already started");
         players.clear();
     }
 
     void enroll(Player player)
     {
         if (status != Status::NOT_PREPARED)
-            throw logic_error("Contest already started");
+            throw std::logic_error("Contest already started");
 
         players.insert(std::move(player));
 
@@ -137,9 +134,9 @@ public:
         auto player = players[participant];
 
         if (status != Status::ON_GOING)
-            throw logic_error("Contest not started");
+            throw std::logic_error("Contest not started");
         if (current.role != player.role)
-            throw logic_error(player.name + " not allowed to play");
+            throw std::logic_error(player.name + " not allowed to play");
 
         if (current.board[pos])
             throw StonePositionitionOccupiedException("Stone positionition occupied");
@@ -156,9 +153,9 @@ public:
         auto player = players[participant];
 
         if (status != Status::ON_GOING)
-            throw logic_error("Contest not started");
+            throw std::logic_error("Contest not started");
         if (players[current.role] != player)
-            throw logic_error(player.name + " not allowed to concede");
+            throw std::logic_error(player.name + " not allowed to concede");
 
         status = Status::GAME_OVER;
         winner = -player.role;

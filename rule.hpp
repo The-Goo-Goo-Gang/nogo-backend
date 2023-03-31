@@ -7,7 +7,12 @@
 #include <ranges>
 #include <vector>
 
+#ifdef __GNUC__
+#include <range/v3/all.hpp>
+#else
 namespace ranges = std::ranges;
+#endif
+
 export constexpr inline auto rank_n = 9;
 
 export struct Position {
@@ -162,7 +167,8 @@ export struct State {
 
     auto available_actions() const
     {
-        return Board::index() | std::ranges::views::filter([&](auto pos) -> bool {
+        auto index = Board::index();
+        return index | ranges::views::filter([&](auto pos) -> bool {
             return !board[pos] && !next_state(pos).board.is_capturing(pos);
         }) | ranges::to<std::vector>();
     }
