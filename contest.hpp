@@ -88,6 +88,13 @@ public:
         ON_GOING,
         GAME_OVER,
     };
+    bool should_giveup = false;
+    enum class WinType{
+        NONE,
+        TIMEOUT,
+        SUICIDE,
+        GIVEUP,
+    };
     class StonePositionitionOccupiedException : public std::logic_error {
         using std::logic_error::logic_error;
     };
@@ -100,6 +107,7 @@ public:
     PlayerCouple players;
 
     Status status;
+    WinType win_type;
     Role winner;
 
     void clear()
@@ -108,7 +116,9 @@ public:
         moves.clear();
         players.clear();
         status = Status {};
+        win_type = WinType {};
         winner = Role {};
+        should_giveup = false;
     }
 
     void reject()
@@ -144,8 +154,12 @@ public:
         current = current.next_state(pos);
         moves.push_back(pos);
 
-        if (winner = current.is_over())
+        if (winner = current.is_over()){
             status = Status::GAME_OVER;
+            win_type = WinType::SUICIDE;
+        }
+        if(!current.available_actions().size())
+        should_giveup = true;
     }
 
     void concede(Participant_ptr participant)
@@ -158,6 +172,22 @@ public:
             throw std::logic_error(player.name + " not allowed to concede");
 
         status = Status::GAME_OVER;
+        win_type = WinType::GIVEUP;
         winner = -player.role;
     }
-}
+
+    void overtime(Participant_ptr participant)
+    {
+        auto player = players[participant];
+
+        if (status != Status::ON_GOING)
+            throw std::logic_error("Contest not started");
+        if (players[current.role] != player)
+            throw std::logic_error("not in " + player.name + "'s turn");
+
+        status = Status::GAME_OVER;
+        win_type = WinType::TIMEOUT;
+        winner = -player.role;
+    }
+    auto round() const { return moves.size(); }
+};
