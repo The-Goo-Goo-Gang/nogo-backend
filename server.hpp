@@ -30,7 +30,7 @@
 #include <vector>
 
 #include "contest.hpp"
-#include "data.hpp"
+#include "message.hpp"
 
 using asio::awaitable;
 using asio::co_spawn;
@@ -201,7 +201,7 @@ private:
                     asio::error_code ec;
                     co_await timer_.async_wait(redirect_error(use_awaitable, ec));
                 } else {
-                    co_await asio::async_write(socket_, asio::buffer(static_cast<std::string>(write_msgs_.front())),
+                    co_await asio::async_write(socket_, asio::buffer(write_msgs_.front().to_string()),
                         use_awaitable);
                     write_msgs_.pop_front();
                 }

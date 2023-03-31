@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "rule.hpp"
-#include "data.hpp"
+#include "message.hpp"
 
 class Participant {
 public:

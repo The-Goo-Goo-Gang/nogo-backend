@@ -79,7 +79,7 @@ public:
     }
     constexpr auto operator<=>(const Role&) const = default;
     constexpr auto operator-() const { return Role(-id); }
-    constexpr operator bool() { return id; }
+    constexpr explicit operator bool() { return id; }
 };
 constexpr Role Role::BLACK { 1 }, Role::WHITE { -1 }, Role::NONE { 0 };
 
