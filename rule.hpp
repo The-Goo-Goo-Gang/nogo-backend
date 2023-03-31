@@ -1,15 +1,18 @@
-module;
+#pragma once
+#define export
 
 #include <algorithm>
 #include <array>
 #include <iostream>
-// #include <range/v3/all.hpp>
 #include <ranges>
 #include <vector>
 
-export module nogo.rule;
-
+#ifdef __GNUC__
+#include <range/v3/all.hpp>
+#else
 namespace ranges = std::ranges;
+#endif
+
 export constexpr inline auto rank_n = 9;
 
 export struct Position {
@@ -76,7 +79,7 @@ public:
     }
     constexpr auto operator<=>(const Role&) const = default;
     constexpr auto operator-() const { return Role(-id); }
-    constexpr operator bool() { return id; }
+    constexpr explicit operator bool() { return id; }
 };
 constexpr Role Role::BLACK { 1 }, Role::WHITE { -1 }, Role::NONE { 0 };
 
@@ -164,7 +167,8 @@ export struct State {
 
     auto available_actions() const
     {
-        return Board::index() | std::ranges::views::filter([&](auto pos) -> bool {
+        auto index = Board::index();
+        return index | ranges::views::filter([&](auto pos) -> bool {
             return !board[pos] && !next_state(pos).board.is_capturing(pos);
         }) | ranges::to<std::vector>();
     }

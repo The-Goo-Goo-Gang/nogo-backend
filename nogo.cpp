@@ -2,8 +2,8 @@
 #include <ranges>
 #include <vector>
 
-import nogo.network;
-import nogo.contest;
+#include "network.hpp"
+#include "contest.hpp"
 
 auto main(int argc, char* argv[]) -> int
 {
@@ -13,6 +13,6 @@ auto main(int argc, char* argv[]) -> int
     }
     auto ports = std::ranges::subrange(argv + 1, argv + argc)
         | std::views::transform([](auto s) -> unsigned short { return std::atoi(s); })
-        | std::ranges::to<std::vector>();
+        | ranges::to<std::vector>();
     launch_server(ports);
 }

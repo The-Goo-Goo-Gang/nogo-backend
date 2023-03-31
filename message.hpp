@@ -1,9 +1,8 @@
-module;
+#pragma once
+#define export
 
 #include <nlohmann/json.hpp>
 #include <string_view>
-
-export module nogo.network.data;
 
 using nlohmann::json;
 using std::string;
@@ -21,31 +20,26 @@ export enum class OpCode : int {
     CHAT_OP,
 };
 
-export class Message {
-    json j_object_;
-
-public:
+export struct Message {
     OpCode op;
     string data1;
     string data2;
 
+    Message() = default;
     Message(OpCode op, string_view data1 = "", string_view data2 = "")
-        : j_object_ { { "op", op }, { "data1", data1 }, { "data2", data2 } }
-        , op(op)
+        : op(op)
         , data1(data1)
         , data2(data2)
     {
     }
-    Message(string_view msg)
-        : j_object_(json::parse(msg))
-        , op(j_object_["op"].get<OpCode>())
-        , data1(j_object_["data1"].get<string>())
-        , data2(j_object_["data2"].get<string>())
+    Message(string_view sv)
     {
+        from_json(json(sv), *this);
+    }
+    auto to_string() -> string
+    {
+        return json(*this).dump();
     }
 
-    operator string()
-    {
-        return j_object_.dump();
-    }
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Message, op, data1, data2)
 };

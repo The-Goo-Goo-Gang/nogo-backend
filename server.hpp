@@ -8,7 +8,8 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
 
-module;
+#pragma once
+#define export
 
 #include <asio/awaitable.hpp>
 #include <asio/co_spawn.hpp>
@@ -28,10 +29,8 @@ module;
 #include <string>
 #include <vector>
 
-export module nogo.network.server;
-
-import nogo.network.data;
-import nogo.contest;
+#include "contest.hpp"
+#include "message.hpp"
 
 using asio::awaitable;
 using asio::co_spawn;
@@ -54,38 +53,38 @@ public:
         string_view data1 { msg.data1 }, data2 { msg.data2 };
 
         switch (msg.op) {
-        case OpCode::READY_OP:
-            Role role { data == "b" ? BLACK : data == "w" ? WHITE
-                                                          : NONE }; // or strict?
+        case OpCode::READY_OP: {
+            Role role { data2 == "b" ? Role::BLACK : data2 == "w" ? Role::WHITE
+                                                          : Role::NONE }; // or strict?
             Player player { participant, data1, role };
-            contest.register(player);
+            contest.enroll(player);
             break;
-
-        case OpCode::REJECT_OP:
+        }
+        case OpCode::REJECT_OP: {
             contest.reject();
             break;
-
-        case OpCode::MOVE_OP:
+        }
+        case OpCode::MOVE_OP: {
             Position pos { data1[0] - 'A', data1[1] - '1' }; // 11-way board will fail!
             contest.play(participant, pos);
 
             auto player = contest.players[participant];
-            auto opposite = -player;
+            auto opposite = contest.players[-player.role];
 
             if (contest.winner == opposite.role) {
-                participant.deliver({ OpCode::SUICIDE_END_OP });
-                room.deliver(participant, msg); // broadcast
+                participant->deliver({ OpCode::SUICIDE_END_OP });
+                deliver(msg, participant); // broadcast
             } else if (contest.winner == player.role) {
-                participant.deliver({ OpCode::GIVEUP_OP });
-                opposite.deliver({ OpCode::GIVEUP_END_OP }); // radical
+                participant->deliver({ OpCode::GIVEUP_OP });
+                opposite.participant->deliver({ OpCode::GIVEUP_END_OP }); // radical
             }
             break;
-
-        case OpCode::GIVEUP_OP:
+        }
+        case OpCode::GIVEUP_OP: {
             contest.concede(participant);
             contest.overtime(participant);
             break;
-
+        }
         case OpCode::TIMEOUT_END_OP:
         case OpCode::SUICIDE_END_OP:
         case OpCode::GIVEUP_END_OP:
@@ -94,11 +93,11 @@ public:
             // the evil client must be wrong
             break;
 
-        case OpCode::LEAVE_OP:
-            participant.stop();
+        case OpCode::LEAVE_OP: {
+            participant->stop();
             break;
-
-        case OpCode::CHAT_OP:
+        }
+        case OpCode::CHAT_OP: {
             recent_msgs_.push_back(msg);
             while (recent_msgs_.size() > max_recent_msgs)
                 recent_msgs_.pop_front();
@@ -106,6 +105,7 @@ public:
             for (auto participant : participants_)
                 participant->deliver(msg);
             break;
+        }
         }
     }
     void join(Participant_ptr participant)
@@ -141,8 +141,10 @@ private:
 
 class Session : public Participant, public std::enable_shared_from_this<Session> {
 public:
-    auto operator<=>(const Session&) const = default;
-
+    bool operator==(const Participant&) const override
+    {
+        return false;
+    }
     Session(tcp::socket socket, Room& room)
         : socket_(std::move(socket))
         , timer_(socket_.get_executor())
@@ -166,6 +168,13 @@ public:
     {
         write_msgs_.push_back(msg);
         timer_.cancel_one();
+    }
+
+    void stop() override
+    {
+        room_.leave(shared_from_this());
+        socket_.close();
+        timer_.cancel();
     }
 
 private:
@@ -193,7 +202,7 @@ private:
                     asio::error_code ec;
                     co_await timer_.async_wait(redirect_error(use_awaitable, ec));
                 } else {
-                    co_await asio::async_write(socket_, asio::buffer(static_cast<std::string>(write_msgs_.front())),
+                    co_await asio::async_write(socket_, asio::buffer(write_msgs_.front().to_string()),
                         use_awaitable);
                     write_msgs_.pop_front();
                 }
@@ -201,13 +210,6 @@ private:
         } catch (std::exception&) {
             stop();
         }
-    }
-
-    void stop()
-    {
-        room_.leave(shared_from_this());
-        socket_.close();
-        timer_.cancel();
     }
 
     tcp::socket socket_;
