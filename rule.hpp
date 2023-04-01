@@ -57,14 +57,8 @@ export struct Position {
     constexpr auto operator<=>(const Position& p) const = default;
 };
 
-export class Role {
+export struct Role {
     int id;
-    constexpr explicit Role(int id)
-        : id(id)
-    {
-    }
-
-public:
     static const Role BLACK, WHITE, NONE;
 
     constexpr Role()
@@ -80,7 +74,11 @@ public:
     constexpr auto operator<=>(const Role&) const = default;
     constexpr auto operator-() const { return Role(-id); }
     constexpr explicit operator bool() { return id; }
-    friend class UiMessage;
+private:
+    constexpr explicit Role(int id)
+        : id(id)
+    {
+    }
 };
 constexpr Role Role::BLACK { 1 }, Role::WHITE { -1 }, Role::NONE { 0 };
 

@@ -23,6 +23,12 @@ export enum class OpCode : int {
     UPDATE_UI_STATE_OP
 };
 
+export enum class PlayerType {
+    LOCAL_HUMAN_PLAYER,
+    REMOTE_HUMAN_PLAYER,
+    BOT_PLAYER,
+};
+
 export struct Message {
     OpCode op;
     string data1;
@@ -37,7 +43,7 @@ export struct Message {
     }
     Message(string_view sv)
     {
-        from_json(json(sv), *this);
+        from_json(json::parse(sv), *this);
     }
     auto to_string() -> string
     {

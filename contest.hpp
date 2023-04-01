@@ -8,20 +8,24 @@
 #include <stdexcept>
 #include <vector>
 
+#include <asio/ip/tcp.hpp>
+using asio::ip::tcp;
+
 #include "rule.hpp"
 #include "message.hpp"
 
 class Participant {
 public:
+    bool is_local { false };
+
     virtual ~Participant()
     {
     }
+    virtual tcp::endpoint endpoint() const = 0;
     virtual void deliver(Message msg) = 0;
     virtual void stop() = 0;
     virtual bool operator==(const Participant&) const = 0;
 };
-// bool is_evil { false };
-// bool is_local { false };
 
 export using Participant_ptr = std::shared_ptr<Participant>;
 
@@ -29,12 +33,7 @@ export struct Player {
     Participant_ptr participant;
     std::string name;
     Role role;
-    enum class PlayerType
-    {
-        LOCAL_HUMAN,
-        REMOTE_HUMAN,
-        BOT,
-    } type;
+    PlayerType type;
     Player() = default;
     Player(Participant_ptr participant, Role role)
         : participant(participant)
@@ -79,7 +78,7 @@ struct PlayerCouple {
     }
     auto contains(Role role) const
     {
-        return role.map(player1, player2).empty();
+        return !role.map(player1, player2).empty();
     }
     auto contains(Participant_ptr participant) const
     {
@@ -126,7 +125,7 @@ public:
     std::vector<Position> moves;
     PlayerCouple players;
 
-    Status status;
+    Status status = Status::NOT_PREPARED;
     WinType win_type;
     Role winner;
 
