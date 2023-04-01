@@ -56,8 +56,8 @@ public:
         switch (msg.op) {
         case OpCode::START_LOCAL_GAME_OP: {
             // TODO
-            Player player1 { participant, "BLACK", Role::BLACK, Player::PlayerType::LOCAL_HUMAN },
-                player2 { participant, "WHITE", Role::WHITE, Player::PlayerType::LOCAL_HUMAN };
+            Player player1 { participant, "BLACK", Role::BLACK, PlayerType::LOCAL_HUMAN_PLAYER },
+                player2 { participant, "WHITE", Role::WHITE, PlayerType::LOCAL_HUMAN_PLAYER };
             contest.enroll(player1), contest.enroll(player2);
             break;
         }
@@ -65,7 +65,7 @@ public:
         case OpCode::READY_OP: {
             Role role { data2 == "b" ? Role::BLACK : data2 == "w" ? Role::WHITE
                                                                   : Role::NONE }; // or strict?
-            Player player { participant, data1, role, Player::PlayerType::REMOTE_HUMAN };
+            Player player { participant, data1, role, PlayerType::REMOTE_HUMAN_PLAYER };
             contest.enroll(player);
             break;
         }
@@ -78,10 +78,14 @@ public:
             auto role { data2 == "b" ? Role::BLACK : data2 == "w" ? Role::WHITE
                                                                   : Role::NONE };
 
-            auto player { contest.players[{participant, role}] };
+            auto player { contest.players[{ participant, role }] };
             auto opponent = contest.players[-player.role];
 
             contest.play(player, pos);
+
+            if(participant->is_local) {
+                participant->deliver(UiMessage(contest));
+            }
 
             if (contest.winner == opponent.role) {
                 participant->deliver({ OpCode::SUICIDE_END_OP });
@@ -95,7 +99,7 @@ public:
         case OpCode::GIVEUP_OP: {
             auto role { data2 == "b" ? Role::BLACK : data2 == "w" ? Role::WHITE
                                                                   : Role::NONE };
-            auto player { contest.players[{participant, role}]};
+            auto player { contest.players[{ participant, role }] };
             contest.concede(player);
             break;
         }
@@ -143,8 +147,9 @@ public:
         while (recent_msgs_.size() > max_recent_msgs)
             recent_msgs_.pop_front();
 
-        for (auto participant : participants_)
-            participant->deliver(msg);
+        for (auto p : participants_)
+            if(p != participant)
+                participant->deliver(msg);
     }
 
 private:
@@ -155,14 +160,20 @@ private:
 
 class Session : public Participant, public std::enable_shared_from_this<Session> {
 public:
-    bool operator==(const Participant&) const override
+    bool is_local{false};
+    tcp::endpoint endpoint() const override
     {
-        return false;
+        return socket_.remote_endpoint();
     }
-    Session(tcp::socket socket, Room& room)
+    bool operator==(const Participant& participant) const override
+    {
+        return endpoint() == participant.endpoint();
+    }
+    Session(tcp::socket socket, Room& room, bool is_local = false)
         : socket_(std::move(socket))
         , timer_(socket_.get_executor())
         , room_(room)
+        , is_local(is_local)
     {
         timer_.expires_at(std::chrono::steady_clock::time_point::max());
     }
@@ -216,7 +227,7 @@ private:
                     asio::error_code ec;
                     co_await timer_.async_wait(redirect_error(use_awaitable, ec));
                 } else {
-                    co_await asio::async_write(socket_, asio::buffer(write_msgs_.front().to_string()),
+                    co_await asio::async_write(socket_, asio::buffer(write_msgs_.front().to_string() + "\n"),
                         use_awaitable);
                     write_msgs_.pop_front();
                 }
@@ -232,12 +243,12 @@ private:
     std::deque<Message> write_msgs_;
 };
 
-awaitable<void> listener(tcp::acceptor acceptor)
+awaitable<void> listener(tcp::acceptor acceptor, bool is_local = false)
 {
     Room room;
 
     for (;;) {
-        std::make_shared<Session>(co_await acceptor.async_accept(use_awaitable), room)->start();
+        std::make_shared<Session>(co_await acceptor.async_accept(use_awaitable), room, is_local)->start();
     }
 }
 
@@ -246,7 +257,8 @@ export void launch_server(std::vector<asio::ip::port_type> ports)
     try {
         asio::io_context io_context(1);
 
-        for (auto port : ports) {
+        co_spawn(io_context, listener(tcp::acceptor(io_context, { tcp::v4(), ports[0] }), true), detached);
+        for (auto port : ports | std::views::drop(1)) {
             co_spawn(io_context, listener(tcp::acceptor(io_context, { tcp::v4(), port })), detached);
         }
 
