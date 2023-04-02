@@ -1,2 +1,2 @@
-#include "server.hpp"
 #include "message.hpp"
+#include "server.hpp"

@@ -2,8 +2,8 @@
 #include <ranges>
 #include <vector>
 
-#include "network.hpp"
 #include "contest.hpp"
+#include "network.hpp"
 
 auto main(int argc, char* argv[]) -> int
 {

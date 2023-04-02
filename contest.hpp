@@ -11,13 +11,17 @@
 #include <asio/ip/tcp.hpp>
 using asio::ip::tcp;
 
-#include "rule.hpp"
 #include "message.hpp"
+#include "rule.hpp"
 
 class Participant {
 public:
     bool is_local { false };
-
+    Participant() = default;
+    Participant(bool is_local)
+        : is_local(is_local)
+    {
+    }
     virtual ~Participant()
     {
     }
@@ -108,7 +112,7 @@ public:
         GAME_OVER,
     };
     bool should_giveup = false;
-    enum class WinType{
+    enum class WinType {
         NONE,
         TIMEOUT,
         SUICIDE,
@@ -153,7 +157,6 @@ public:
             throw std::logic_error("Contest already started");
 
         players.insert(std::move(player));
-
         if (players.contains(Role::BLACK) && players.contains(Role::WHITE))
             status = Status::ON_GOING;
     }
@@ -171,12 +174,12 @@ public:
         current = current.next_state(pos);
         moves.push_back(pos);
 
-        if (winner = current.is_over()){
+        if ((winner = current.is_over())) {
             status = Status::GAME_OVER;
             win_type = WinType::SUICIDE;
         }
-        if(!current.available_actions().size())
-        should_giveup = true;
+        if (!current.available_actions().size())
+            should_giveup = true;
     }
 
     void concede(Player player)

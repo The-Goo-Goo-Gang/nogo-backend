@@ -54,6 +54,9 @@ public:
         string_view data1 { msg.data1 }, data2 { msg.data2 };
 
         switch (msg.op) {
+        case OpCode::UPDATE_UI_STATE_OP: {
+            break;
+        }
         case OpCode::START_LOCAL_GAME_OP: {
             // TODO
             Player player1 { participant, "BLACK", Role::BLACK, PlayerType::LOCAL_HUMAN_PLAYER },
@@ -83,7 +86,7 @@ public:
 
             contest.play(player, pos);
 
-            if(participant->is_local) {
+            if (participant->is_local) {
                 participant->deliver(UiMessage(contest));
             }
 
@@ -148,7 +151,7 @@ public:
             recent_msgs_.pop_front();
 
         for (auto p : participants_)
-            if(p != participant)
+            if (p != participant)
                 participant->deliver(msg);
     }
 
@@ -160,7 +163,6 @@ private:
 
 class Session : public Participant, public std::enable_shared_from_this<Session> {
 public:
-    bool is_local{false};
     tcp::endpoint endpoint() const override
     {
         return socket_.remote_endpoint();
@@ -173,7 +175,7 @@ public:
         : socket_(std::move(socket))
         , timer_(socket_.get_executor())
         , room_(room)
-        , is_local(is_local)
+        , Participant { is_local }
     {
         timer_.expires_at(std::chrono::steady_clock::time_point::max());
     }
