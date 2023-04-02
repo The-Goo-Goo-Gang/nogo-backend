@@ -194,10 +194,8 @@ public:
         winner = -player.role;
     }
 
-    void overtime(Participant_ptr participant)
+    void overtime(Player player)
     {
-        auto player = players[participant];
-
         if (status != Status::ON_GOING)
             throw std::logic_error("Contest not started");
         if (players[current.role] != player)
