@@ -112,7 +112,7 @@ public:
         GAME_OVER,
     };
     bool should_giveup = false;
-    enum class WinType {
+    enum class WinType : int {
         NONE,
         TIMEOUT,
         SUICIDE,

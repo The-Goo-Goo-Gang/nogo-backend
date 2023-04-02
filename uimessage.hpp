@@ -38,7 +38,7 @@ void from_json(const nlohmann::json& j, std::optional<T>& v)
 export struct UiMessage : public Message {
     struct DynamicStatistics {
         string id, name, value;
-        NLOHMANN_DEFINE_TYPE_INTRUSIVE(DynamicStatistics, id, name, value)
+        NLOHMANN_DEFINE_TYPE_INTRUSIVE(DynamicStatistics, id, name, value);
     };
     struct PlayerData {
         string name, avatar;
@@ -51,7 +51,7 @@ export struct UiMessage : public Message {
             , chess_type(player.role.id)
         {
         }
-        NLOHMANN_DEFINE_TYPE_INTRUSIVE(PlayerData, name, avatar, type, chess_type)
+        NLOHMANN_DEFINE_TYPE_INTRUSIVE(PlayerData, name, avatar, type, chess_type);
     };
     struct GameMetadata {
         int size;
@@ -65,38 +65,53 @@ export struct UiMessage : public Message {
             , turn_timeout(0)
         {
         }
-        NLOHMANN_DEFINE_TYPE_INTRUSIVE(GameMetadata, size, player_opposing, player_our, turn_timeout)
+        NLOHMANN_DEFINE_TYPE_INTRUSIVE(GameMetadata, size, player_opposing, player_our, turn_timeout);
+    };
+    struct GameResult {
+        int winner;
+        Contest::WinType win_type;
+        GameResult() = default;
+        GameResult(const Contest& contest)
+            : winner(contest.winner.id)
+            , win_type(contest.win_type)
+            {
+            }
+        NLOHMANN_DEFINE_TYPE_INTRUSIVE(GameResult, winner, win_type);
     };
     struct Game {
         std::array<std::array<int, rank_n>, rank_n> chessboard;
         bool is_our_player_playing;
-        GameMetadata gamemetadata;
+        GameMetadata metadata;
         std::vector<DynamicStatistics> statistics;
         Game() = default;
         Game(const Contest& contest)
             : is_our_player_playing(contest.current.role == contest.players.player1.role)
-            , gamemetadata(GameMetadata(contest.players))
+            , metadata(GameMetadata(contest.players))
         {
             const auto board = contest.current.board.to_2darray();
             for (int i = 0; i < rank_n; ++i)
                 for (int j = 0; j < rank_n; ++j)
                     chessboard[i][j] = board[i][j].id;
         }
-        NLOHMANN_DEFINE_TYPE_INTRUSIVE(Game, chessboard, is_our_player_playing, gamemetadata, statistics);
+        NLOHMANN_DEFINE_TYPE_INTRUSIVE(Game, chessboard, is_our_player_playing, metadata, statistics);
     };
     struct UiState {
         bool is_gaming;
+        Contest::Status status;
         std::optional<Game> game;
+        std::optional<GameResult> game_result;
         UiState(const Contest& contest)
             : is_gaming(contest.status == Contest::Status::ON_GOING)
+            , status(contest.status)
             , game(is_gaming ? std::optional<Game>(contest) : std::nullopt)
+            , game_result(contest.status == Contest::Status::GAME_OVER ? std::optional<GameResult>(contest) : std::nullopt)
         {
         }
         auto to_string() -> string
         {
             return json(*this).dump();
         }
-        NLOHMANN_DEFINE_TYPE_INTRUSIVE(UiState, is_gaming, game);
+        NLOHMANN_DEFINE_TYPE_INTRUSIVE(UiState, is_gaming, status, game, game_result);
     };
     UiMessage(const Contest& contest)
         : Message(OpCode::UPDATE_UI_STATE_OP, std::to_string(std::time(0)), UiState(contest).to_string())
