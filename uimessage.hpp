@@ -103,7 +103,7 @@ export struct UiMessage : public Message {
         UiState(const Contest& contest)
             : is_gaming(contest.status == Contest::Status::ON_GOING)
             , status(contest.status)
-            , game(is_gaming ? std::optional<Game>(contest) : std::nullopt)
+            , game(contest.status != Contest::Status::NOT_PREPARED ? std::optional<Game>(contest) : std::nullopt)
             , game_result(contest.status == Contest::Status::GAME_OVER ? std::optional<GameResult>(contest) : std::nullopt)
         {
         }
