@@ -82,7 +82,7 @@ public:
                                                                   : Role::NONE };
 
             auto player { contest.players[{ participant, role }] };
-            auto opponent = contest.players[-player.role];
+            auto opponent { contest.players[-player.role] };
 
             contest.play(player, pos);
 
@@ -144,8 +144,6 @@ public:
 
     void deliver(Message msg, Participant_ptr participant)
     {
-        process_data(msg, participant);
-
         recent_msgs_.push_back(msg);
         while (recent_msgs_.size() > max_recent_msgs)
             recent_msgs_.pop_front();
@@ -212,7 +210,7 @@ private:
                 std::size_t n = co_await asio::async_read_until(socket_, asio::dynamic_buffer(read_msg, 1024), "\n", use_awaitable);
 
                 Message msg { read_msg.substr(0, n) };
-                room_.deliver(msg, shared_from_this());
+                room_.process_data(msg, shared_from_this());
 
                 read_msg.erase(0, n);
             }
