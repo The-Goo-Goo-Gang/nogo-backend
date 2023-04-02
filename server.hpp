@@ -72,6 +72,19 @@ public:
 
             break;
         }
+        case OpCode::LOCAL_GAME_TIMEOUT_OP: {
+            auto role { data1 == "b" ? Role::BLACK : data1 == "w" ? Role::WHITE
+                                                                  : Role::NONE };
+            auto player { contest.players[{ participant, role }] };
+
+            contest.overtime(player);
+
+            if (participant->is_local) {
+                participant->deliver(UiMessage(contest));
+            }
+
+            break;
+        }
 
         case OpCode::READY_OP: {
             Role role { data2 == "b" ? Role::BLACK : data2 == "w" ? Role::WHITE

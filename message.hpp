@@ -20,7 +20,9 @@ export enum class OpCode : int {
     CHAT_OP,
     //-----Extend OpCode ------------
     START_LOCAL_GAME_OP = 100000,
-    UPDATE_UI_STATE_OP
+    UPDATE_UI_STATE_OP,
+    // TODO: Only for temporary use, need to be removed in stage 2
+    LOCAL_GAME_TIMEOUT_OP
 };
 
 export enum class PlayerType {
