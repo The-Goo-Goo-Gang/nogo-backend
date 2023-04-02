@@ -194,6 +194,7 @@ public:
 
     void deliver(Message msg) override
     {
+        std::cout << "deliver " << msg.to_string() << std::endl;
         write_msgs_.push_back(msg);
         timer_.cancel_one();
     }
@@ -217,7 +218,8 @@ private:
 
                 read_msg.erase(0, n);
             }
-        } catch (std::exception&) {
+        } catch (std::exception& e) {
+            std::cerr << "Exception: " << e.what() << "\n";
             stop();
         }
     }
@@ -235,7 +237,8 @@ private:
                     write_msgs_.pop_front();
                 }
             }
-        } catch (std::exception&) {
+        } catch (std::exception& e) {
+            std::cerr << "Exception: " << e.what() << "\n";
             stop();
         }
     }
