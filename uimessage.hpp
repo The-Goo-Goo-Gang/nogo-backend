@@ -77,9 +77,10 @@ export struct UiMessage : public Message {
             : is_our_player_playing(contest.current.role == contest.players.player1.role)
             , gamemetadata(GameMetadata(contest.players))
         {
-            for (int i = 0; i < rank_n; i++)
-                for (int j = 0; j < rank_n; j++)
-                    chessboard[i][j] = contest.current.board.arr[Position { i, j }].id;
+            const auto board = contest.current.board.to_2darray();
+            for (int i = 0; i < rank_n; ++i)
+                for (int j = 0; j < rank_n; ++j)
+                    chessboard[i][j] = board[i][j].id;
         }
         NLOHMANN_DEFINE_TYPE_INTRUSIVE(Game, chessboard, is_our_player_playing, gamemetadata, statistics);
     };

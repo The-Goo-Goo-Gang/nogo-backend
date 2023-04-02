@@ -53,8 +53,12 @@ export struct Position {
         return res -= p;
     }
 
-    constexpr operator bool() const { return x >= 0 && y >= 0; }
+    constexpr explicit operator bool() const { return x >= 0 && y >= 0; }
     constexpr auto operator<=>(const Position& p) const = default;
+    friend auto operator<<(std::ostream& os, Position p) -> std::ostream&
+    {
+        return os << '(' << p.x << ", " << p.y << ')';
+    }
 };
 
 export struct Role {
@@ -71,9 +75,15 @@ export struct Role {
         return id == 1 ? v_black : id == -1 ? v_white
                                             : throw std::runtime_error("invalid role");
     }
+    constexpr decltype(auto) map(auto&& v_black, auto&& v_white, auto&& v_none) const
+    {
+        return id == 1 ? v_black : id == -1 ? v_white
+                                            : v_none;
+    }
     constexpr auto operator<=>(const Role&) const = default;
     constexpr auto operator-() const { return Role(-id); }
     constexpr explicit operator bool() { return id; }
+
 private:
     constexpr explicit Role(int id)
         : id(id)
@@ -85,15 +95,14 @@ constexpr Role Role::BLACK { 1 }, Role::WHITE { -1 }, Role::NONE { 0 };
 export class Board {
     std::array<Role, rank_n * rank_n> arr;
 
-    // static method with module causes ICE, fuck Visual C++!
+    static constexpr std::array delta { Position { -1, 0 }, Position { 1, 0 }, Position { 0, -1 }, Position { 0, 1 } };
     constexpr auto neighbor(Position p) const
     {
-        constexpr std::array delta { Position { -1, 0 }, Position { 1, 0 }, Position { 0, -1 }, Position { 0, 1 } };
-        return delta | std::views::transform([&](auto d) { return p + d; });
+        return delta | std::views::transform([&](auto d) { return p + d; }) | std::views::filter([&](auto p) { return in_border(p); });
     }
 
 public:
-    // constexpr auto operator[](this auto&& p) { return arr[p.x * rank_n + p.y]; }
+    // constexpr auto operator[](this auto&& self, Position p) { return self.arr[p.x * rank_n + p.y]; }
     constexpr auto operator[](Position p) -> Role& { return arr[p.x * rank_n + p.y]; }
     constexpr auto operator[](Position p) const { return arr[p.x * rank_n + p.y]; }
 
@@ -112,10 +121,10 @@ public:
     {
         auto self = *this;
         visit[p] = Role::BLACK;
-        return std::ranges::any_of(neighbor(p), [&](auto n) constexpr {
-            return self.in_border(n) && !self[n];
-        }) || std::ranges::any_of(neighbor(p), [&](auto n) constexpr {
-            return self.in_border(n) && !visit[n] && self[n] == self[p]
+        return std::ranges::any_of(neighbor(p), [&](auto n) {
+            return !self[n];
+        }) || std::ranges::any_of(neighbor(p), [&](auto n) {
+            return !visit[n] && self[n] == self[p]
                 && _liberties(n, visit);
         });
     };
@@ -135,11 +144,30 @@ public:
         auto self = *this;
         return !self.liberties(p)
             || std::ranges::any_of(neighbor(p), [&](auto n) {
-                   return self.in_border(n) && self[n] == -self[p]
+                   return self[n] == -self[p]
                        && !self.liberties(n);
                });
     }
-    friend class UiMessage;
+
+    constexpr auto to_2darray() const
+    {
+        std::array<std::array<Role, rank_n>, rank_n> res;
+        for (int i = 0; i < rank_n; i++)
+            for (int j = 0; j < rank_n; j++)
+                res[i][j] = arr[i * rank_n + j];
+        return res;
+    }
+
+    friend auto operator<<(std::ostream& os, const Board& board) -> std::ostream&
+    {
+        auto arr = board.to_2darray();
+        for (int i = 0; i < rank_n; i++) {
+            for (int j = 0; j < rank_n; j++)
+                os << arr[i][j].map("B", "W", "-");
+            os << std::endl;
+        }
+        return os;
+    }
 };
 
 export struct State {

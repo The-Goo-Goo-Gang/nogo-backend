@@ -1,5 +1,4 @@
 add_rules("mode.debug", "mode.release")
-add_rules("plugin.vsxmake.autoupdate")
 
 add_requires("asio", "nlohmann_json")
 add_requires("range-v3")
