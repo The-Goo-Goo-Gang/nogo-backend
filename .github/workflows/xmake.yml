@@ -31,6 +31,13 @@ jobs:
         Add-Content $env:GITHUB_PATH "C:\tmp_msys2\msys64\usr\bin"
     - name: Configure XMake
       run: xmake f -p mingw --mingw=C:/tmp_msys2/msys64/mingw64 -c --ldflags="-lws2_32 -lwsock32" -y
+    - name: Upload log when Failure
+      if: ${{ failure() }}
+      uses: actions/upload-artifact@v2
+      with:
+        name: xmake-log
+        path: |
+          C:\Users\runneradmin\AppData\Local\.xmake\cache\packages\2304\r\range-v3\0.12.0\installdir.failed\logs\install.txt
     - name: Build
       run: xmake
     - name: Upload artifact
