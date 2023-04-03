@@ -99,12 +99,12 @@ export struct UiMessage : public Message {
         bool is_gaming;
         Contest::Status status;
         std::optional<Game> game;
-        std::optional<GameResult> game_result;
+        GameResult game_result;
         UiState(const Contest& contest)
             : is_gaming(contest.status == Contest::Status::ON_GOING)
             , status(contest.status)
             , game(contest.status != Contest::Status::NOT_PREPARED ? std::optional<Game>(contest) : std::nullopt)
-            , game_result(contest.status == Contest::Status::GAME_OVER ? std::optional<GameResult>(contest) : std::nullopt)
+            , game_result(GameResult(contest))
         {
         }
         auto to_string() -> string
