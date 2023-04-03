@@ -124,7 +124,12 @@ public:
             auto role { data2 == "b" ? Role::BLACK : data2 == "w" ? Role::WHITE
                                                                   : Role::NONE };
             auto player { contest.players[{ participant, role }] };
+            
             contest.concede(player);
+
+            if (participant->is_local) {
+                participant->deliver(UiMessage(contest));
+            }
             break;
         }
         case OpCode::TIMEOUT_END_OP:

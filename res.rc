@@ -1,0 +1,29 @@
+#pragma code_page(65001)
+
+1 VERSIONINFO
+FILEVERSION 0,1,0,0
+PRODUCTVERSION 0,1,0,0
+FILEOS 0x40004
+FILETYPE 0x1
+{
+BLOCK "StringFileInfo"
+{
+    BLOCK "080404B0"
+    {
+        VALUE "CompanyName", "The-Goo-Goo-Gang"
+        VALUE "FileDescription", "NoGo 不围棋"
+        VALUE "FileVersion", "0.1.0.0"
+        VALUE "InternalName", "NoGo"
+        VALUE "LegalCopyright", "Copyright (C) 2023 The-Goo-Goo-Gang. All rights reserved."
+        VALUE "OriginalFilename", "nogo-server.exe"
+        VALUE "ProductName", "NoGo 不围棋"
+        VALUE "ProductVersion", "0.1.0.0"
+    }
+}
+BLOCK "VarFileInfo"
+{
+    VALUE "Translation", 0x0804, 0x04B0
+}
+}
+
+IDI_ICON1 ICON DISCARDABLE "icon.ico"
