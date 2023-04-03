@@ -25,6 +25,8 @@ jobs:
           git
           base-devel
           mingw-w64-x86_64-toolchain
+    - name: Output dir info for debug
+      run: ls C:/tmp_msys2
     - name: Configure XMake
       run: xmake f -p mingw --mingw=C:/tmp_msys2/mingw64 -c --ldflags="-lws2_32 -lwsock32" -y
     - name: Build
