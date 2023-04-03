@@ -20,12 +20,13 @@ jobs:
       uses: msys2/setup-msys2@v2
       with:
         msystem: MINGW64
-    - name: Install g++ in MSYS2
-      shell: msys2 {0}
-      run: |
-        pacman -S --needed base-devel mingw-w64-x86_64-toolchain --noconfirm
+        location: C:\tmp_msys2
+        install: >-
+          git
+          base-devel
+          mingw-w64-x86_64-toolchain
     - name: Configure XMake
-      run: xmake f -p mingw -c --ldflags="-lws2_32 -lwsock32" -y
+      run: xmake f -p mingw --mingw="C:\tmp_msys2\mingw64" -c --ldflags="-lws2_32 -lwsock32" -y
     - name: Build
       run: xmake
     - name: Upload artifact
