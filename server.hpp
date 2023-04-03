@@ -65,6 +65,24 @@ public:
             Player player1 { participant, "BLACK", Role::BLACK, PlayerType::LOCAL_HUMAN_PLAYER },
                 player2 { participant, "WHITE", Role::WHITE, PlayerType::LOCAL_HUMAN_PLAYER };
             contest.enroll(player1), contest.enroll(player2);
+
+            if (participant->is_local) {
+                participant->deliver(UiMessage(contest));
+            }
+
+            break;
+        }
+        case OpCode::LOCAL_GAME_TIMEOUT_OP: {
+            auto role { data1 == "b" ? Role::BLACK : data1 == "w" ? Role::WHITE
+                                                                  : Role::NONE };
+            auto player { contest.players[{ participant, role }] };
+
+            contest.overtime(player);
+
+            if (participant->is_local) {
+                participant->deliver(UiMessage(contest));
+            }
+
             break;
         }
 
@@ -194,6 +212,7 @@ public:
 
     void deliver(Message msg) override
     {
+        std::cout << "deliver " << msg.to_string() << std::endl;
         write_msgs_.push_back(msg);
         timer_.cancel_one();
     }
@@ -217,7 +236,8 @@ private:
 
                 read_msg.erase(0, n);
             }
-        } catch (std::exception&) {
+        } catch (std::exception& e) {
+            std::cerr << "Exception: " << e.what() << "\n";
             stop();
         }
     }
@@ -235,7 +255,8 @@ private:
                     write_msgs_.pop_front();
                 }
             }
-        } catch (std::exception&) {
+        } catch (std::exception& e) {
+            std::cerr << "Exception: " << e.what() << "\n";
             stop();
         }
     }

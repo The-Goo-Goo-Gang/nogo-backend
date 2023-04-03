@@ -171,6 +171,7 @@ public:
         if (current.board[pos])
             throw StonePositionitionOccupiedException("Stone positionition occupied");
 
+        std::cout << "contest play " << pos.x << ", " << pos.y << std::endl;
         current = current.next_state(pos);
         moves.push_back(pos);
 
@@ -194,10 +195,8 @@ public:
         winner = -player.role;
     }
 
-    void overtime(Participant_ptr participant)
+    void overtime(Player player)
     {
-        auto player = players[participant];
-
         if (status != Status::ON_GOING)
             throw std::logic_error("Contest not started");
         if (players[current.role] != player)
