@@ -1,0 +1,32 @@
+name: XMake
+
+on:
+  push:
+    branches: [ "main", "dev", "dev-huancheng" ]
+  pull_request:
+    branches: [ "main", "dev" ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up XMake
+      uses: xmake-io/github-action-setup-xmake@v1
+      with:
+        xmake-version: latest
+    - name: Set up MinGW
+      uses: egor-tensin/setup-mingw@v2
+      with:
+        platform: x64
+    - name: Configure XMake
+      run: xmake f -p mingw -c --ldflags="-lws2_32 -lwsock32"
+    - name: Build
+      run: xmake
+    - name: Upload artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: xmake-artifact
+        path: |
+          build\mingw\x86_64\release\*.exe
