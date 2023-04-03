@@ -16,45 +16,19 @@ namespace ranges = std::ranges;
 export constexpr inline auto rank_n = 9;
 
 export struct Position {
-    int x, y;
+    int x { -1 }, y { -1 };
     constexpr Position(int x, int y)
         : x(x)
         , y(y)
     {
     }
-    constexpr Position(int x)
-        : Position(x, x)
-    {
-    }
-
-    constexpr Position()
-        : Position(-1)
-    {
-    }
-
-    constexpr Position& operator+=(Position p)
-    {
-        x += p.x, y += p.y;
-        return *this;
-    }
+    constexpr Position() = default;
     constexpr Position operator+(Position p) const
     {
-        auto res = *this;
-        return res += p;
+        return { x + p.x, y + p.y };
     }
-    constexpr Position& operator-=(Position p)
-    {
-        x -= p.x, y -= p.y;
-        return *this;
-    }
-    constexpr Position operator-(Position p) const
-    {
-        auto res = *this;
-        return res -= p;
-    }
-
     constexpr explicit operator bool() const { return x >= 0 && y >= 0; }
-    constexpr auto operator<=>(const Position& p) const = default;
+    // constexpr auto operator<=>(const Position& p) const = default;
     friend auto operator<<(std::ostream& os, Position p) -> std::ostream&
     {
         return os << '(' << p.x << ", " << p.y << ')';
@@ -96,9 +70,11 @@ export class Board {
     std::array<Role, rank_n * rank_n> arr;
 
     static constexpr std::array delta { Position { -1, 0 }, Position { 1, 0 }, Position { 0, -1 }, Position { 0, 1 } };
-    constexpr auto neighbor(Position p) const
+    auto neighbor(Position p) const
     {
-        return delta | std::views::transform([&](auto d) { return p + d; }) | std::views::filter([&](auto p) { return in_border(p); });
+        return delta | std::views::transform([&](auto d) { return p + d; })
+            | std::views::filter([&](auto p) { return in_border(p); })
+            | ranges::to<std::vector>();
     }
 
 public:
@@ -117,9 +93,9 @@ public:
         return res;
     }
 
-    constexpr auto _liberties(Position p, Board& visit) const -> bool
+    auto _liberties(Position p, Board& visit) const -> bool
     {
-        auto self = *this;
+        auto& self { *this };
         visit[p] = Role::BLACK;
         return std::ranges::any_of(neighbor(p), [&](auto n) {
             return !self[n];
@@ -128,20 +104,20 @@ public:
                 && _liberties(n, visit);
         });
     };
-    constexpr bool liberties(Position p) const
+    bool liberties(Position p) const
     {
-        auto self = *this;
+        auto& self { *this };
         Board visit {};
         return self._liberties(p, visit);
     }
 
     // judge whether stones around `p` is captured by `p`
     // or `p` is captured by stones around `p`
-    constexpr bool is_capturing(Position p) const
+    bool is_capturing(Position p) const
     {
         // assert(self[p]);
 
-        auto self = *this;
+        auto& self { *this };
         return !self.liberties(p)
             || std::ranges::any_of(neighbor(p), [&](auto n) {
                    return self[n] == -self[p]
@@ -196,7 +172,7 @@ export struct State {
     auto available_actions() const
     {
         auto index = Board::index();
-        return index | ranges::views::filter([&](auto pos) -> bool {
+        return index | ranges::views::filter([&](auto pos) {
             return !board[pos] && !next_state(pos).board.is_capturing(pos);
         }) | ranges::to<std::vector>();
     }
@@ -211,5 +187,4 @@ export struct State {
         */
         return Role::NONE;
     }
-    friend class UiMessage;
 };
