@@ -1,4 +1,4 @@
-name: XMake
+name: Build with XMake
 
 on:
   push:
@@ -16,12 +16,16 @@ jobs:
       uses: xmake-io/github-action-setup-xmake@v1
       with:
         xmake-version: latest
-    - name: Set up MinGW
-      uses: egor-tensin/setup-mingw@v2
+    - name: Set up MSYS2
+      uses: msys2/setup-msys2@v2
       with:
-        platform: x64
+        msystem: MINGW64
+    - name: Install g++ in MSYS2
+      shell: msys2 {0}
+      run: |
+        pacman -S --needed base-devel mingw-w64-x86_64-toolchain --noconfirm
     - name: Configure XMake
-      run: xmake f -p mingw -c --ldflags="-lws2_32 -lwsock32"
+      run: xmake f -p mingw -c --ldflags="-lws2_32 -lwsock32" -y
     - name: Build
       run: xmake
     - name: Upload artifact
