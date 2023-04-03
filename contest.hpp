@@ -86,8 +86,8 @@ struct PlayerCouple {
     }
     auto contains(Participant_ptr participant) const
     {
-        return player1.participant && *player1.participant == *participant
-            || player2.participant && *player2.participant == *participant;
+        return (player1.participant && *player1.participant == *participant)
+            || (player2.participant && *player2.participant == *participant);
     }
     auto insert(Player&& player)
     {
@@ -111,7 +111,7 @@ public:
         ON_GOING,
         GAME_OVER,
     };
-    bool should_giveup = false;
+    bool should_giveup { false };
     enum class WinType {
         NONE,
         TIMEOUT,
@@ -129,7 +129,7 @@ public:
     std::vector<Position> moves;
     PlayerCouple players;
 
-    Status status = Status::NOT_PREPARED;
+    Status status;
     WinType win_type;
     Role winner;
 

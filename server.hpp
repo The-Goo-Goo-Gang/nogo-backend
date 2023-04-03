@@ -191,10 +191,10 @@ public:
         return endpoint() == participant.endpoint();
     }
     Session(tcp::socket socket, Room& room, bool is_local = false)
-        : socket_(std::move(socket))
+        : Participant { is_local }
+        , socket_(std::move(socket))
         , timer_(socket_.get_executor())
         , room_(room)
-        , Participant { is_local }
     {
         timer_.expires_at(std::chrono::steady_clock::time_point::max());
     }

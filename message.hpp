@@ -33,8 +33,7 @@ export enum class PlayerType {
 
 export struct Message {
     OpCode op;
-    string data1;
-    string data2;
+    string data1, data2;
 
     Message() = default;
     Message(OpCode op, string_view data1 = "", string_view data2 = "")

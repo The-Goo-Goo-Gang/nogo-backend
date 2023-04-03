@@ -5,6 +5,7 @@ add_requires("range-v3")
 set_languages("cxxlatest")
 -- set_optimize("aggressive")
 set_optimize("faster")
+set_warnings("more", "error")
 
 target("nogo")
     set_kind("binary")
