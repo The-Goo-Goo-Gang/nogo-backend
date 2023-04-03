@@ -1,3 +1,4 @@
+#pragma code_page(65001)
 
 1 VERSIONINFO
 FILEVERSION 0,1,0,0
@@ -7,16 +8,16 @@ FILETYPE 0x1
 {
 BLOCK "StringFileInfo"
 {
-    BLOCK "040904B0"
+    BLOCK "080404B0"
     {
         VALUE "CompanyName", "The-Goo-Goo-Gang"
-        VALUE "FileDescription", "NoGo ≤ªŒß∆Â"
-        VALUE "FileVersion", "0.1.0"
+        VALUE "FileDescription", "NoGo ‰∏çÂõ¥Ê£ã"
+        VALUE "FileVersion", "0.1.0.0"
         VALUE "InternalName", "NoGo"
         VALUE "LegalCopyright", "Copyright (C) 2023 The-Goo-Goo-Gang. All rights reserved."
-        VALUE "OriginalFilename", "server.exe"
-        VALUE "ProductName", "NoGo ≤ªŒß∆Â"
-        VALUE "ProductVersion", "0.1.0"
+        VALUE "OriginalFilename", "nogo-server.exe"
+        VALUE "ProductName", "NoGo ‰∏çÂõ¥Ê£ã"
+        VALUE "ProductVersion", "0.1.0.0"
     }
 }
 BLOCK "VarFileInfo"
