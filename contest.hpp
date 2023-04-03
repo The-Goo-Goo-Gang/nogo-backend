@@ -112,7 +112,7 @@ public:
         GAME_OVER,
     };
     bool should_giveup = false;
-    enum class WinType : int {
+    enum class WinType {
         NONE,
         TIMEOUT,
         SUICIDE,
@@ -171,6 +171,7 @@ public:
         if (current.board[pos])
             throw StonePositionitionOccupiedException("Stone positionition occupied");
 
+        std::cout << "contest play " << pos.x << ", " << pos.y << std::endl;
         current = current.next_state(pos);
         moves.push_back(pos);
 
