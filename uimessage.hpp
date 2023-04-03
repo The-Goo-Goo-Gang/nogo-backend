@@ -38,7 +38,7 @@ void from_json(const nlohmann::json& j, std::optional<T>& v)
 export struct UiMessage : public Message {
     struct DynamicStatistics {
         string id, name, value;
-        NLOHMANN_DEFINE_TYPE_INTRUSIVE(DynamicStatistics, id, name, value);
+        NLOHMANN_DEFINE_TYPE_INTRUSIVE(DynamicStatistics, id, name, value)
     };
     struct PlayerData {
         string name, avatar;
@@ -51,7 +51,7 @@ export struct UiMessage : public Message {
             , chess_type(player.role.id)
         {
         }
-        NLOHMANN_DEFINE_TYPE_INTRUSIVE(PlayerData, name, avatar, type, chess_type);
+        NLOHMANN_DEFINE_TYPE_INTRUSIVE(PlayerData, name, avatar, type, chess_type)
     };
     struct GameMetadata {
         int size;
@@ -65,7 +65,7 @@ export struct UiMessage : public Message {
             , turn_timeout(0)
         {
         }
-        NLOHMANN_DEFINE_TYPE_INTRUSIVE(GameMetadata, size, player_opposing, player_our, turn_timeout);
+        NLOHMANN_DEFINE_TYPE_INTRUSIVE(GameMetadata, size, player_opposing, player_our, turn_timeout)
     };
     struct GameResult {
         int winner;
@@ -76,7 +76,7 @@ export struct UiMessage : public Message {
             , win_type(contest.win_type)
             {
             }
-        NLOHMANN_DEFINE_TYPE_INTRUSIVE(GameResult, winner, win_type);
+        NLOHMANN_DEFINE_TYPE_INTRUSIVE(GameResult, winner, win_type)
     };
     struct Game {
         std::array<std::array<int, rank_n>, rank_n> chessboard;
@@ -93,7 +93,7 @@ export struct UiMessage : public Message {
                 for (int j = 0; j < rank_n; ++j)
                     chessboard[i][j] = board[i][j].id;
         }
-        NLOHMANN_DEFINE_TYPE_INTRUSIVE(Game, chessboard, is_our_player_playing, metadata, statistics);
+        NLOHMANN_DEFINE_TYPE_INTRUSIVE(Game, chessboard, is_our_player_playing, metadata, statistics)
     };
     struct UiState {
         bool is_gaming;
@@ -111,7 +111,7 @@ export struct UiMessage : public Message {
         {
             return json(*this).dump();
         }
-        NLOHMANN_DEFINE_TYPE_INTRUSIVE(UiState, is_gaming, status, game, game_result);
+        NLOHMANN_DEFINE_TYPE_INTRUSIVE(UiState, is_gaming, status, game, game_result)
     };
     UiMessage(const Contest& contest)
         : Message(OpCode::UPDATE_UI_STATE_OP, std::to_string(std::time(0)), UiState(contest).to_string())
