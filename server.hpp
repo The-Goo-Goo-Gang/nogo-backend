@@ -111,10 +111,10 @@ public:
                 participant->deliver(UiMessage(contest));
             }
 
-            if (contest.winner == opponent.role) {
+            if (contest.result.winner == opponent.role) {
                 participant->deliver({ OpCode::SUICIDE_END_OP });
                 deliver(msg, participant); // broadcast
-            } else if (contest.winner == player.role) {
+            } else if (contest.result.winner == player.role) {
                 participant->deliver({ OpCode::GIVEUP_OP });
                 opponent.participant->deliver({ OpCode::GIVEUP_END_OP }); // radical
             }

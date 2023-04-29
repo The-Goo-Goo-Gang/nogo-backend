@@ -111,12 +111,15 @@ public:
         ON_GOING,
         GAME_OVER,
     };
-    bool should_giveup { false };
     enum class WinType {
         NONE,
         TIMEOUT,
         SUICIDE,
         GIVEUP,
+    };
+    struct GameResult {
+        Role winner;
+        Contest::WinType win_type;
     };
     class StonePositionitionOccupiedException : public std::logic_error {
         using std::logic_error::logic_error;
@@ -125,22 +128,22 @@ public:
         using runtime_error::runtime_error;
     };
 
+    bool should_giveup { false };
+
     State current {};
     std::vector<Position> moves;
     PlayerCouple players;
 
     Status status;
-    WinType win_type;
-    Role winner;
+    GameResult result;
 
     void clear()
     {
-        current = State {};
+        current = {};
         moves.clear();
         players.clear();
-        status = Status {};
-        win_type = WinType {};
-        winner = Role {};
+        status = {};
+        result = {};
         should_giveup = false;
     }
 
@@ -175,9 +178,9 @@ public:
         current = current.next_state(pos);
         moves.push_back(pos);
 
-        if ((winner = current.is_over())) {
+        if (auto winner = current.is_over()) {
             status = Status::GAME_OVER;
-            win_type = WinType::SUICIDE;
+            result = { winner, WinType::SUICIDE };
         }
         if (!current.available_actions().size())
             should_giveup = true;
@@ -191,8 +194,7 @@ public:
             throw std::logic_error(player.name + " not allowed to concede");
 
         status = Status::GAME_OVER;
-        win_type = WinType::GIVEUP;
-        winner = -player.role;
+        result = {-player.role, WinType::GIVEUP};
     }
 
     void overtime(Player player)
@@ -203,8 +205,7 @@ public:
             throw std::logic_error("not in " + player.name + "'s turn");
 
         status = Status::GAME_OVER;
-        win_type = WinType::TIMEOUT;
-        winner = -player.role;
+        result = {-player.role, WinType::TIMEOUT};
     }
     auto round() const { return moves.size(); }
 };

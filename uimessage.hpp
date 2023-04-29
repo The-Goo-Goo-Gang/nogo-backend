@@ -72,8 +72,8 @@ export struct UiMessage : public Message {
         Contest::WinType win_type;
         GameResult() = default;
         GameResult(const Contest& contest)
-            : winner(contest.winner.id)
-            , win_type(contest.win_type)
+            : winner(contest.result.winner.id)
+            , win_type(contest.result.win_type)
             {
             }
         NLOHMANN_DEFINE_TYPE_INTRUSIVE(GameResult, winner, win_type)
