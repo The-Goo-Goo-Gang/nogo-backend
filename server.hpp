@@ -75,7 +75,7 @@ public:
         case OpCode::LOCAL_GAME_TIMEOUT_OP: {
             auto role { data1 == "b" ? Role::BLACK : data1 == "w" ? Role::WHITE
                                                                   : Role::NONE };
-            auto player { contest.players[{ participant, role }] };
+            auto player { contest.players.at(role, participant) };
 
             contest.overtime(player);
 
@@ -102,8 +102,8 @@ public:
             auto role { data2 == "b" ? Role::BLACK : data2 == "w" ? Role::WHITE
                                                                   : Role::NONE };
 
-            auto player { contest.players[{ participant, role }] };
-            auto opponent { contest.players[-player.role] };
+            auto player { contest.players.at(role, participant) };
+            auto opponent { contest.players.at(-player.role) };
 
             contest.play(player, pos);
 
@@ -123,7 +123,7 @@ public:
         case OpCode::GIVEUP_OP: {
             auto role { data2 == "b" ? Role::BLACK : data2 == "w" ? Role::WHITE
                                                                   : Role::NONE };
-            auto player { contest.players[{ participant, role }] };
+            auto player { contest.players.at(role, participant) };
             
             contest.concede(player);
 

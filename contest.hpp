@@ -58,49 +58,55 @@ export struct Player {
         return !name.empty() && std::ranges::all_of(name, [](auto c) { return std::isalnum(c) || c == '_'; });
     }
     auto map(auto v_black, auto v_white) const { return role.map(v_black, v_white); }
-    auto empty() const { return !participant; }
 };
 
-struct PlayerCouple {
-    Player player1, player2;
-    auto operator[](Role role) -> Player& { return role.map(player1, player2); }
-    auto operator[](Participant_ptr participant) -> Player&
+class PlayerList
+{
+    std::vector<Player> players;
+public:
+    auto find(Role role, Participant_ptr participant = nullptr)
     {
-        if (*player1.participant == *participant)
-            return player1;
-        if (*player2.participant == *participant)
-            return player2;
-        throw std::logic_error("Participant not in couple");
+        // If the criteria is valid, the player must match it
+        auto it = std::ranges::find_if(players, [&](auto& p) {
+            return (!role || p.role == role) && (!participant || p.participant == participant);
+        });
+        return it == players.end() ? nullptr : std::addressof(*it);
     }
-    auto operator[](Player player) -> Player&
+    auto find(Role role, Participant_ptr participant = nullptr) const
     {
-        if (player.role == Role::NONE) {
-            return player.participant == player1.participant ? player1 : player2;
-        } else {
-            return player.role.map(player1, player2);
-        }
+        return static_cast<const Player*>(const_cast<PlayerList*>(this)->find(role, participant));
     }
-    auto contains(Role role) const
+
+    auto at(Role role, Participant_ptr participant = nullptr) -> Player&
     {
-        return !role.map(player1, player2).empty();
+        auto it = find(role, participant);
+        if (!it)
+            throw std::logic_error("Player not found");
+        return static_cast<Player&>(*it);
     }
-    auto contains(Participant_ptr participant) const
+    auto at(Role role, Participant_ptr participant = nullptr) const
     {
-        return (player1.participant && *player1.participant == *participant)
-            || (player2.participant && *player2.participant == *participant);
+        return static_cast<const Player&>(const_cast<PlayerList*>(this)->at(role, participant));
+    }
+
+    auto contains(Role role, Participant_ptr participant = nullptr) const
+    {
+        return find(role, participant) != nullptr;
     }
     auto insert(Player&& player)
     {
-        if (!player1.empty() && !player2.empty())
-            throw std::logic_error("Couple already full");
-        if (contains(player.role))
+        if (std::ranges::find(players, player) != players.end())
+            throw std::logic_error("Player already in list");
+        if(contains(player.role))
             throw std::logic_error("Role already occupied");
-        player.role.map(player1, player2) = std::move(player);
-    }
-    void clear() { player1 = player2 = Player {}; }
-    auto opposite(Player player) -> Player&
-    {
-        return player.role.map(player2, player1);
+        if(player.role == Role::NONE) {
+            if(contains(Role::BLACK))
+                player.role = Role::WHITE;
+            else if(contains(Role::WHITE))
+                player.role = Role::BLACK;
+            else throw std::logic_error("No role for player");
+        }
+        players.push_back(std::move(player));
     }
 };
 
@@ -132,7 +138,7 @@ public:
 
     State current {};
     std::vector<Position> moves;
-    PlayerCouple players;
+    PlayerList players;
 
     Status status;
     GameResult result;
@@ -141,7 +147,7 @@ public:
     {
         current = {};
         moves.clear();
-        players.clear();
+        players = {};
         status = {};
         result = {};
         should_giveup = false;
@@ -151,7 +157,7 @@ public:
     {
         if (status != Status::NOT_PREPARED)
             throw std::logic_error("Contest already started");
-        players.clear();
+        players = {};
     }
 
     void enroll(Player player)
@@ -190,7 +196,7 @@ public:
     {
         if (status != Status::ON_GOING)
             throw std::logic_error("Contest not started");
-        if (players[current.role] != player)
+        if (players.at(current.role) != player)
             throw std::logic_error(player.name + " not allowed to concede");
 
         status = Status::GAME_OVER;
@@ -201,7 +207,7 @@ public:
     {
         if (status != Status::ON_GOING)
             throw std::logic_error("Contest not started");
-        if (players[current.role] != player)
+        if (players.at(current.role) != player)
             throw std::logic_error("not in " + player.name + "'s turn");
 
         status = Status::GAME_OVER;
