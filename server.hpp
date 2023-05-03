@@ -32,6 +32,7 @@
 #include "contest.hpp"
 #include "message.hpp"
 #include "uimessage.hpp"
+#include "log.hpp"
 
 using asio::awaitable;
 using asio::co_spawn;
@@ -51,6 +52,7 @@ public:
     */
     void process_data(Message msg, Participant_ptr participant)
     {
+        logger->info("process_data: {}",msg.to_string());
         string_view data1 { msg.data1 }, data2 { msg.data2 };
 
         switch (msg.op) {
@@ -73,6 +75,7 @@ public:
             break;
         }
         case OpCode::LOCAL_GAME_TIMEOUT_OP: {
+            if(data1!="b" && data1!="w") logger->warn("Receive LOCAL_GAME_TIMEOUT_OP with invalid role {}",data1);
             auto role { data1 == "b" ? Role::BLACK : data1 == "w" ? Role::WHITE
                                                                   : Role::NONE };
             auto player { contest.players[{ participant, role }] };
@@ -87,6 +90,7 @@ public:
         }
 
         case OpCode::READY_OP: {
+            if(data2!="b" && data2!="w") logger->warn("Receive READY_OP with invalid role {}",data2);
             Role role { data2 == "b" ? Role::BLACK : data2 == "w" ? Role::WHITE
                                                                   : Role::NONE }; // or strict?
             Player player { participant, data1, role, PlayerType::REMOTE_HUMAN_PLAYER };
@@ -98,6 +102,7 @@ public:
             break;
         }
         case OpCode::MOVE_OP: {
+            if(data2!="b" && data2!="w") logger->trace("Receive MOVE_OP with invalid role {}",data2);
             Position pos { data1[0] - 'A', data1[1] - '1' }; // 11-way board will fail!
             auto role { data2 == "b" ? Role::BLACK : data2 == "w" ? Role::WHITE
                                                                   : Role::NONE };
@@ -121,6 +126,7 @@ public:
             break;
         }
         case OpCode::GIVEUP_OP: {
+            if(data2!="b"&&data2!="w") logger->debug("Receive GIVEUP_OP with invalid role {}",data2);
             auto role { data2 == "b" ? Role::BLACK : data2 == "w" ? Role::WHITE
                                                                   : Role::NONE };
             auto player { contest.players[{ participant, role }] };
@@ -217,6 +223,7 @@ public:
 
     void deliver(Message msg) override
     {
+        logger->info("deliver: {}", msg.to_string());
         std::cout << "deliver " << msg.to_string() << std::endl;
         write_msgs_.push_back(msg);
         timer_.cancel_one();
@@ -243,6 +250,7 @@ private:
             }
         } catch (std::exception& e) {
             std::cerr << "Exception: " << e.what() << "\n";
+            logger->error("Exception: {}", e.what());
             stop();
         }
     }
@@ -262,6 +270,7 @@ private:
             }
         } catch (std::exception& e) {
             std::cerr << "Exception: " << e.what() << "\n";
+            logger->error("Exception: {}", e.what());
             stop();
         }
     }
@@ -297,5 +306,6 @@ export void launch_server(std::vector<asio::ip::port_type> ports)
         io_context.run();
     } catch (std::exception& e) {
         std::cerr << "Exception: " << e.what() << "\n";
+        logger->error("Exception: {}", e.what());
     }
 }

@@ -13,6 +13,7 @@ using asio::ip::tcp;
 
 #include "message.hpp"
 #include "rule.hpp"
+#include "log.hpp"
 
 class Participant {
 public:
@@ -70,6 +71,7 @@ struct PlayerCouple {
             return player1;
         if (*player2.participant == *participant)
             return player2;
+        logger->critical("PlayerCouple: Participant not in couple");
         throw std::logic_error("Participant not in couple");
     }
     auto operator[](Player player) -> Player&
@@ -91,10 +93,16 @@ struct PlayerCouple {
     }
     auto insert(Player&& player)
     {
-        if (!player1.empty() && !player2.empty())
+        if (!player1.empty() && !player2.empty()){
+            logger->critical("Insert player: Couple already full");
             throw std::logic_error("Couple already full");
-        if (contains(player.role))
+        }
+        if (contains(player.role)){
+            if(player.role==Role::WHITE) logger->error("Trying to insert white player");
+            else if(player.role==Role::BLACK)logger->error("Trying to insert black player");
+            logger->critical("Insert player: Role already occupied");
             throw std::logic_error("Role already occupied");
+        }
         player.role.map(player1, player2) = std::move(player);
     }
     void clear() { player1 = player2 = Player {}; }
@@ -146,16 +154,21 @@ public:
 
     void reject()
     {
-        if (status != Status::NOT_PREPARED)
+        if (status != Status::NOT_PREPARED){
+            logger->error("status: {}",(int)status);
+            logger->critical("Reject: Contest already started");
             throw std::logic_error("Contest already started");
+        }
         players.clear();
     }
 
     void enroll(Player player)
     {
-        if (status != Status::NOT_PREPARED)
+        if (status != Status::NOT_PREPARED){
+            logger->error("status: {}",(int)status);
+            logger->critical("Enroll Player: Contest already started");
             throw std::logic_error("Contest already started");
-
+        }
         players.insert(std::move(player));
         if (players.contains(Role::BLACK) && players.contains(Role::WHITE))
             status = Status::ON_GOING;
@@ -163,15 +176,24 @@ public:
 
     void play(Player player, Position pos)
     {
-        if (status != Status::ON_GOING)
+        if (status != Status::ON_GOING){
+            logger->error("status: {}",(int)status);
+            logger->critical("Play: Contest not started");
             throw std::logic_error("Contest not started");
-        if (current.role != player.role)
+        }
+        if (current.role != player.role){
+            if(current.role==Role::WHITE) logger->error("In white turn");
+            else if(current.role==Role::BLACK) logger->error("In black turn");
+            logger->critical("Play: " + player.name + " not allowed to play");
             throw std::logic_error(player.name + " not allowed to play");
-
-        if (current.board[pos])
+        }
+        if (current.board[pos]){
+            logger->error("Trying to play on ({}, {})", pos.x, pos.y);
+            logger->critical("Play: Stone positionition occupied");
             throw StonePositionitionOccupiedException("Stone positionition occupied");
-
+        }
         std::cout << "contest play " << pos.x << ", " << pos.y << std::endl;
+        logger->info("contest play " + std::to_string(pos.x) + ", " + std::to_string(pos.y));
         current = current.next_state(pos);
         moves.push_back(pos);
 
@@ -185,11 +207,17 @@ public:
 
     void concede(Player player)
     {
-        if (status != Status::ON_GOING)
+        if (status != Status::ON_GOING){
+            logger->error("status:{}",(int)status);
+            logger->critical("Concede: Contest not started");
             throw std::logic_error("Contest not started");
-        if (players[current.role] != player)
+        }
+        if (players[current.role] != player){
+            if(current.role==Role::WHITE) logger->error("In white turn");
+            else if(current.role==Role::BLACK) logger->error("In black turn");
+            logger->critical("Concede: " + player.name + " not allowed to concede");
             throw std::logic_error(player.name + " not allowed to concede");
-
+        }
         status = Status::GAME_OVER;
         win_type = WinType::GIVEUP;
         winner = -player.role;
@@ -197,11 +225,17 @@ public:
 
     void overtime(Player player)
     {
-        if (status != Status::ON_GOING)
+        if (status != Status::ON_GOING){
+            logger->error("status:{}",(int)status);
+            logger->critical("Overtime: Contest not started");
             throw std::logic_error("Contest not started");
-        if (players[current.role] != player)
+        }
+        if (players[current.role] != player){
+            if(current.role==Role::WHITE) logger->error("In white turn");
+            else if(current.role==Role::BLACK) logger->error("In black turn");
+            logger->critical("Overtime: not in " + player.name + "'s turn");
             throw std::logic_error("not in " + player.name + "'s turn");
-
+        }
         status = Status::GAME_OVER;
         win_type = WinType::TIMEOUT;
         winner = -player.role;
