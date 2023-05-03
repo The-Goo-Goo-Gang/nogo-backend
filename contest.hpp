@@ -98,8 +98,7 @@ struct PlayerCouple {
             throw std::logic_error("Couple already full");
         }
         if (contains(player.role)){
-            if(player.role==Role::WHITE) logger->error("Trying to insert white player");
-            else if(player.role==Role::BLACK)logger->error("Trying to insert black player");
+            logger->error("Trying to insert {} player",player.role.map("black","white","none"));
             logger->critical("Insert player: Role already occupied");
             throw std::logic_error("Role already occupied");
         }
@@ -115,13 +114,13 @@ struct PlayerCouple {
 export class Contest {
 public:
     enum class Status {
-        NOT_PREPARED,
+        NOT_PREPARED = 0,
         ON_GOING,
         GAME_OVER,
     };
     bool should_giveup { false };
     enum class WinType {
-        NONE,
+        NONE = 0,
         TIMEOUT,
         SUICIDE,
         GIVEUP,
@@ -140,7 +139,6 @@ public:
     Status status;
     WinType win_type;
     Role winner;
-
     void clear()
     {
         current = State {};
@@ -151,7 +149,9 @@ public:
         winner = Role {};
         should_giveup = false;
     }
-
+    Contest(){
+        clear();
+    }
     void reject()
     {
         if (status != Status::NOT_PREPARED){
@@ -182,8 +182,7 @@ public:
             throw std::logic_error("Contest not started");
         }
         if (current.role != player.role){
-            if(current.role==Role::WHITE) logger->error("In white turn");
-            else if(current.role==Role::BLACK) logger->error("In black turn");
+            logger->error("In {}'s turn", current.role.map("black", "white", "none"));
             logger->critical("Play: " + player.name + " not allowed to play");
             throw std::logic_error(player.name + " not allowed to play");
         }
@@ -213,8 +212,7 @@ public:
             throw std::logic_error("Contest not started");
         }
         if (players[current.role] != player){
-            if(current.role==Role::WHITE) logger->error("In white turn");
-            else if(current.role==Role::BLACK) logger->error("In black turn");
+            logger->error("In {} turn",players[current.role].role.map("black","white","none"));
             logger->critical("Concede: " + player.name + " not allowed to concede");
             throw std::logic_error(player.name + " not allowed to concede");
         }
@@ -231,8 +229,7 @@ public:
             throw std::logic_error("Contest not started");
         }
         if (players[current.role] != player){
-            if(current.role==Role::WHITE) logger->error("In white turn");
-            else if(current.role==Role::BLACK) logger->error("In black turn");
+            logger->error("In {}'s turn",current.role.map("black","white","none"));
             logger->critical("Overtime: not in " + player.name + "'s turn");
             throw std::logic_error("not in " + player.name + "'s turn");
         }

@@ -52,7 +52,7 @@ public:
     */
     void process_data(Message msg, Participant_ptr participant)
     {
-        logger->info("process_data: {}",msg.to_string());
+        logger->info("process_data: {} from {}",msg.to_string(),(long long int)&*participant);
         string_view data1 { msg.data1 }, data2 { msg.data2 };
 
         switch (msg.op) {
@@ -163,6 +163,7 @@ public:
     }
     void join(Participant_ptr participant)
     {
+        logger->info("{} join",(long long int)&*participant);
         participants_.insert(participant);
         for (auto msg : recent_msgs_) {
             participant->deliver(msg);
@@ -171,6 +172,7 @@ public:
 
     void leave(Participant_ptr participant)
     {
+        logger->info("{} leave",(long long int)&*participant);
         participants_.erase(participant);
     }
 
@@ -181,8 +183,10 @@ public:
             recent_msgs_.pop_front();
 
         for (auto p : participants_)
-            if (p != participant)
-                participant->deliver(msg);
+            if (p != participant){
+                logger->info("broadcast {} from {}",msg.to_string(),(long long int)&*participant);
+                p->deliver(msg);
+            }
     }
 
 private:
@@ -223,7 +227,7 @@ public:
 
     void deliver(Message msg) override
     {
-        logger->info("deliver: {}", msg.to_string());
+        logger->info("deliver: {} to {}", msg.to_string(), (long long int)&*this);
         std::cout << "deliver " << msg.to_string() << std::endl;
         write_msgs_.push_back(msg);
         timer_.cancel_one();
