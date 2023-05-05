@@ -1,5 +1,7 @@
 #pragma once
-#define export
+#ifndef _EXPORT
+#define _EXPORT
+#endif 
 
 #include <algorithm>
 #include <array>
@@ -13,9 +15,9 @@
 namespace ranges = std::ranges;
 #endif
 
-export constexpr inline auto rank_n = 9;
+_EXPORT constexpr inline auto rank_n = 9;
 
-export struct Position {
+_EXPORT struct Position {
     int x { -1 }, y { -1 };
     constexpr Position(int x, int y)
         : x(x)
@@ -35,7 +37,7 @@ export struct Position {
     }
 };
 
-export struct Role {
+_EXPORT struct Role {
     int id;
     static const Role BLACK, WHITE, NONE;
 
@@ -66,7 +68,7 @@ private:
 };
 constexpr Role Role::BLACK { 1 }, Role::WHITE { -1 }, Role::NONE { 0 };
 
-export class Board {
+_EXPORT class Board {
     std::array<Role, rank_n * rank_n> arr;
 
     static constexpr std::array delta { Position { -1, 0 }, Position { 1, 0 }, Position { 0, -1 }, Position { 0, 1 } };
@@ -146,7 +148,7 @@ public:
     }
 };
 
-export struct State {
+_EXPORT struct State {
     Board board;
     Role role;
     Position last_move;

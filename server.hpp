@@ -9,7 +9,9 @@
 //
 
 #pragma once
-#define export
+#ifndef _EXPORT
+#define _EXPORT
+#endif 
 
 #include <asio/awaitable.hpp>
 #include <asio/co_spawn.hpp>
@@ -281,7 +283,7 @@ awaitable<void> listener(tcp::acceptor acceptor, bool is_local = false)
     }
 }
 
-export void launch_server(std::vector<asio::ip::port_type> ports)
+_EXPORT void launch_server(std::vector<asio::ip::port_type> ports)
 {
     try {
         asio::io_context io_context(1);
