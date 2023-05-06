@@ -33,10 +33,10 @@ _EXPORT struct Position {
     // constexpr auto operator<=>(const Position& p) const = default;
     auto to_string() const -> std::string
     {
-        return { char('A' + x), char('1' + y) }; // FIXME: 11-way board will fail!
+        return std::string(1, 'A' + x) + std::to_string(y);
     }
     constexpr explicit Position(auto str)
-        : Position(str[0] - 'A', str[1] - '1') // FIXME: 11-way board will fail!
+        : Position(str[0] - 'A', stoi(std::string { str.substr(1) }))
     {
     }
 };
@@ -49,7 +49,7 @@ _EXPORT struct Role {
         : Role(0)
     {
     }
-
+ 
     constexpr decltype(auto) map(auto&& v_black, auto&& v_white, auto&& v_none) const
     {
         return id == 1 ? v_black
