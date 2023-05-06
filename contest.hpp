@@ -60,9 +60,9 @@ export struct Player {
     auto map(auto v_black, auto v_white) const { return role.map(v_black, v_white); }
 };
 
-class PlayerList
-{
+class PlayerList {
     std::vector<Player> players;
+
 public:
     auto find(Role role, Participant_ptr participant = nullptr)
     {
@@ -97,14 +97,15 @@ public:
     {
         if (std::ranges::find(players, player) != players.end())
             throw std::logic_error("Player already in list");
-        if(contains(player.role))
+        if (contains(player.role))
             throw std::logic_error("Role already occupied");
-        if(player.role == Role::NONE) {
-            if(contains(Role::BLACK))
+        if (player.role == Role::NONE) {
+            if (contains(Role::BLACK))
                 player.role = Role::WHITE;
-            else if(contains(Role::WHITE))
+            else if (contains(Role::WHITE))
                 player.role = Role::BLACK;
-            else throw std::logic_error("No role for player");
+            else
+                throw std::logic_error("No role for player");
         }
         players.push_back(std::move(player));
     }
@@ -200,10 +201,10 @@ public:
             throw std::logic_error(player.name + " not allowed to concede");
 
         status = Status::GAME_OVER;
-        result = {-player.role, WinType::GIVEUP};
+        result = { -player.role, WinType::GIVEUP };
     }
 
-    void overtime(Player player)
+    void timeout(Player player)
     {
         if (status != Status::ON_GOING)
             throw std::logic_error("Contest not started");
@@ -211,7 +212,7 @@ public:
             throw std::logic_error("not in " + player.name + "'s turn");
 
         status = Status::GAME_OVER;
-        result = {-player.role, WinType::TIMEOUT};
+        result = { -player.role, WinType::TIMEOUT };
     }
     auto round() const { return moves.size(); }
 };

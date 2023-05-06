@@ -23,6 +23,7 @@
 #include <asio/use_awaitable.hpp>
 #include <asio/write.hpp>
 
+#include <chrono>
 #include <deque>
 #include <iostream>
 #include <set>
@@ -45,6 +46,10 @@ class Room {
     std::deque<std::string> chats;
 
 public:
+    Room(asio::io_context& io_context)
+        : timer_ { io_context }
+    {
+    }
     /*
     建立连接成功时，客户端是请求对局方，也就是服务端在收到客户端任何通信前不与客户端进行交流。
     对局结束后，或暂时拒绝后，想再来一局（重发）的是请求对局方。另外，如果已经收到对方想再来一局了，程序应该阻止本方重复发送请求，而引导先接受或拒绝。你可以不处理因信息传输导致的同时发送，你可以假设不存在这种情况。
@@ -77,7 +82,7 @@ public:
                                                                   : Role::NONE };
             auto player { contest.players.at(role, participant) };
 
-            contest.overtime(player);
+            contest.timeout(player);
 
             if (participant->is_local) {
                 participant->deliver(UiMessage(contest));
@@ -98,11 +103,15 @@ public:
             break;
         }
         case OpCode::MOVE_OP: {
-            Position pos { data1[0] - 'A', data1[1] - '1' }; // 11-way board will fail!
-            auto role { data2 == "b" ? Role::BLACK : data2 == "w" ? Role::WHITE
-                                                                  : Role::NONE };
+            timer_.cancel();
 
-            auto player { contest.players.at(role, participant) };
+            Position pos { data1[0] - 'A', data1[1] - '1' }; // 11-way board will fail!
+            // auto role { data2 == "b" ? Role::BLACK : data2 == "w" ? Role::WHITE
+            //                                                      : Role::NONE };
+
+            milliseconds ms { std::stoull(std::string { data2 }) };
+
+            auto player { contest.players.at(Role::NONE, participant) };
             auto opponent { contest.players.at(-player.role) };
 
             contest.play(player, pos);
@@ -110,6 +119,14 @@ public:
             if (participant->is_local) {
                 participant->deliver(UiMessage(contest));
             }
+
+            timer_.expires_after(TIMEOUT);
+            timer_.async_wait([this, opponent](const asio::error_code& ec) {
+                if (!ec) {
+                    contest.timeout(opponent);
+                    opponent.participant->deliver({ OpCode::TIMEOUT_END_OP });
+                }
+            });
 
             if (contest.result.winner == opponent.role) {
                 participant->deliver({ OpCode::SUICIDE_END_OP });
@@ -124,7 +141,7 @@ public:
             auto role { data2 == "b" ? Role::BLACK : data2 == "w" ? Role::WHITE
                                                                   : Role::NONE };
             auto player { contest.players.at(role, participant) };
-            
+
             contest.concede(player);
 
             if (participant->is_local) {
@@ -180,6 +197,8 @@ public:
     }
 
 private:
+    asio::steady_timer timer_;
+
     std::set<Participant_ptr> participants_;
     enum { max_recent_msgs = 100 };
     std::deque<Message> recent_msgs_;
@@ -274,7 +293,11 @@ private:
 
 awaitable<void> listener(tcp::acceptor acceptor, bool is_local = false)
 {
-    Room room;
+    // This is safe because the acceptor was created with an io_context object
+    asio::execution_context& ec = acceptor.get_executor().context();
+    asio::io_context& io_context = static_cast<asio::io_context&>(ec);
+
+    Room room { io_context };
 
     for (;;) {
         std::make_shared<Session>(co_await acceptor.async_accept(use_awaitable), room, is_local)->start();
