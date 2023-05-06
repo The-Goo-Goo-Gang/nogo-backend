@@ -41,6 +41,12 @@ using asio::redirect_error;
 using asio::use_awaitable;
 using asio::ip::tcp;
 
+using namespace std::chrono_literals;
+using std::chrono::milliseconds;
+using std::chrono::system_clock;
+
+constexpr auto TIMEOUT { 3000ms };
+
 auto trim(std::string_view sv)
 {
     sv.remove_prefix(std::min(sv.find_first_not_of(" \t\r\n"), sv.size()));
