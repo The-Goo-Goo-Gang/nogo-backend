@@ -21,5 +21,5 @@ void init_log(){
     std::vector<spdlog::sink_ptr> sinks = { trace_sink, debug_sink, info_sink, warn_sink };
     logger = spdlog::logger("logger", sinks.begin(), sinks.end());
     logger->set_level(spdlog::level::trace);
-    logger->flush_on(spdlog::level::err);
+    logger->flush_on(spdlog::level::critical);
 }

@@ -98,8 +98,7 @@ struct PlayerCouple {
             throw std::logic_error("Couple already full");
         }
         if (contains(player.role)){
-            logger->error("Trying to insert {} player",player.role.map("black","white","none"));
-            logger->critical("Insert player: Role already occupied");
+            logger->critical("Insert player: {} role already occupied",player.role.map("black","white","none"));
             throw std::logic_error("Role already occupied");
         }
         player.role.map(player1, player2) = std::move(player);
@@ -155,8 +154,7 @@ public:
     void reject()
     {
         if (status != Status::NOT_PREPARED){
-            logger->error("status: {}",(int)status);
-            logger->critical("Reject: Contest already started");
+            logger->critical("Reject: Contest stautus is {}", (int)status);
             throw std::logic_error("Contest already started");
         }
         players.clear();
@@ -165,8 +163,7 @@ public:
     void enroll(Player player)
     {
         if (status != Status::NOT_PREPARED){
-            logger->error("status: {}",(int)status);
-            logger->critical("Enroll Player: Contest already started");
+            logger->critical("Enroll Player: Contest stautus is {}", (int)status);
             throw std::logic_error("Contest already started");
         }
         players.insert(std::move(player));
@@ -177,18 +174,15 @@ public:
     void play(Player player, Position pos)
     {
         if (status != Status::ON_GOING){
-            logger->error("status: {}",(int)status);
-            logger->critical("Play: Contest not started");
+            logger->critical("Play: Contest stautus is {}", (int)status);
             throw std::logic_error("Contest not started");
         }
         if (current.role != player.role){
-            logger->error("In {}'s turn", current.role.map("black", "white", "none"));
-            logger->critical("Play: " + player.name + " not allowed to play");
+            logger->critical("Play: In {}'s turn, " + player.name + " not allowed to play", current.role.map("black", "white"));
             throw std::logic_error(player.name + " not allowed to play");
         }
         if (current.board[pos]){
-            logger->error("Trying to play on ({}, {})", pos.x, pos.y);
-            logger->critical("Play: Stone positionition occupied");
+            logger->critical("Play: positon ({},{}) is occupied", pos.x, pos.y);
             throw StonePositionitionOccupiedException("Stone positionition occupied");
         }
         std::cout << "contest play " << pos.x << ", " << pos.y << std::endl;
@@ -207,13 +201,11 @@ public:
     void concede(Player player)
     {
         if (status != Status::ON_GOING){
-            logger->error("status:{}",(int)status);
-            logger->critical("Concede: Contest not started");
+            logger->critical("Concede: Contest status is {}",(int)status);
             throw std::logic_error("Contest not started");
         }
         if (players[current.role] != player){
-            logger->error("In {} turn",players[current.role].role.map("black","white","none"));
-            logger->critical("Concede: " + player.name + " not allowed to concede");
+            logger->critical("Concede: In {}'s turn," + player.name + " not allowed to concede",current.role.map("black","white"));
             throw std::logic_error(player.name + " not allowed to concede");
         }
         status = Status::GAME_OVER;
@@ -224,13 +216,11 @@ public:
     void overtime(Player player)
     {
         if (status != Status::ON_GOING){
-            logger->error("status:{}",(int)status);
-            logger->critical("Overtime: Contest not started");
+            logger->critical("Overtime: Contest status is {}",(int)status);
             throw std::logic_error("Contest not started");
         }
         if (players[current.role] != player){
-            logger->error("In {}'s turn",current.role.map("black","white","none"));
-            logger->critical("Overtime: not in " + player.name + "'s turn");
+            logger->critical("Overtime: In {}'s turn," + player.name + " shouldn't overtime",current.role.map("black","white"));
             throw std::logic_error("not in " + player.name + "'s turn");
         }
         status = Status::GAME_OVER;
