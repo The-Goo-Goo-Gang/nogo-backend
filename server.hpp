@@ -16,6 +16,7 @@
 #include <asio/awaitable.hpp>
 #include <asio/co_spawn.hpp>
 #include <asio/detached.hpp>
+#include <asio/error_code.hpp>
 #include <asio/io_context.hpp>
 #include <asio/ip/tcp.hpp>
 #include <asio/read_until.hpp>
@@ -49,6 +50,10 @@ using std::chrono::system_clock;
 
 constexpr auto TIMEOUT { 3000ms };
 
+class Room;
+
+void start_session(asio::io_context&, Room&, asio::error_code&, const string& ip_address, const string& port);
+
 class Room {
     Contest contest;
     std::deque<std::string> chats;
@@ -56,6 +61,7 @@ class Room {
 public:
     Room(asio::io_context& io_context)
         : timer_ { io_context }
+        , io_context_ { io_context }
     {
     }
     /*
@@ -68,6 +74,16 @@ public:
 
         switch (msg.op) {
         case OpCode::UPDATE_UI_STATE_OP: {
+            break;
+        }
+        case OpCode::CONNECT_TO_REMOTE_OP: {
+            asio::error_code ec;
+            start_session(io_context_, *this, ec, msg.data1, msg.data2);
+            if (ec) {
+                std::cerr << "start_session failed: " << ec.message() << std::endl;
+            } else {
+                std::cout << "start_session success: " << msg.data1 << ":" << msg.data2 << std::endl;
+            }
             break;
         }
         case OpCode::START_LOCAL_GAME_OP: {
@@ -115,7 +131,7 @@ public:
         case OpCode::MOVE_OP: {
             timer_cancelled_ = true;
             timer_.cancel();
-
+            
             Position pos { data1 };
             milliseconds ms { std::stoull(std::string { data2 }) };
 
@@ -209,6 +225,7 @@ public:
 private:
     bool timer_cancelled_ { false };
     asio::steady_timer timer_;
+    asio::io_context& io_context_;
 
     std::set<Participant_ptr> participants_;
     enum { max_recent_msgs = 100 };
@@ -302,16 +319,19 @@ private:
     std::deque<Message> write_msgs_;
 };
 
-awaitable<void> listener(tcp::acceptor acceptor, bool is_local = false)
+void start_session(asio::io_context& io_context, Room& room, asio::error_code& ec, const string& ip_address, const string& port)
 {
-    // This is safe because the acceptor was created with an io_context object
-    asio::execution_context& ec = acceptor.get_executor().context();
-    asio::io_context& io_context = static_cast<asio::io_context&>(ec);
+    tcp::socket socket { io_context };
+    socket.connect(tcp::endpoint(asio::ip::make_address(ip_address), std::stoi(port)), ec);
+    if (!ec)
+        std::make_shared<Session>(std::move(socket), room, false)->start();
+}
 
-    Room room { io_context };
-
+awaitable<void> listener(tcp::acceptor acceptor, Room& room, bool is_local = false)
+{
     for (;;) {
         std::make_shared<Session>(co_await acceptor.async_accept(use_awaitable), room, is_local)->start();
+        std::cout << "new connection to " << acceptor.local_endpoint() << std::endl;
     }
 }
 
@@ -319,13 +339,14 @@ _EXPORT void launch_server(std::vector<asio::ip::port_type> ports)
 {
     try {
         asio::io_context io_context(1);
+        Room room { io_context };
 
         tcp::endpoint local { tcp::v4(), ports[0] };
-        co_spawn(io_context, listener(tcp::acceptor(io_context, local), true), detached);
+        co_spawn(io_context, listener(tcp::acceptor(io_context, local), room, true), detached);
         std::cout << "Serving on " << local << std::endl;
         for (auto port : ports | std::views::drop(1)) {
             tcp::endpoint ep { tcp::v4(), port };
-            co_spawn(io_context, listener(tcp::acceptor(io_context, ep)), detached);
+            co_spawn(io_context, listener(tcp::acceptor(io_context, ep), room), detached);
             std::cout << "Serving on " << ep << std::endl;
         }
 
