@@ -86,6 +86,11 @@ public:
         case OpCode::CONNECT_TO_REMOTE_OP: {
             asio::error_code ec;
             start_session(io_context_, *this, ec, msg.data1, msg.data2);
+            if (ec) {
+                std::cerr << "start_session failed: " << ec.message() << std::endl;
+            } else {
+                std::cout << "start_session success: " << msg.data1 << ":" << msg.data2 << std::endl;
+            }
             break;
         }
         case OpCode::START_LOCAL_GAME_OP: {
@@ -332,6 +337,7 @@ awaitable<void> listener(tcp::acceptor acceptor, Room& room, bool is_local = fal
 {
     for (;;) {
         std::make_shared<Session>(co_await acceptor.async_accept(use_awaitable), room, is_local)->start();
+        std::cout << "new connection to " << acceptor.local_endpoint() << std::endl;
     }
 }
 
