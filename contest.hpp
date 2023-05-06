@@ -1,5 +1,7 @@
 #pragma once
-#define export
+#ifndef _EXPORT
+#define _EXPORT
+#endif 
 
 #include <algorithm>
 #include <cctype>
@@ -39,9 +41,9 @@ public:
     virtual bool operator==(const Participant&) const = 0;
 };
 
-export using Participant_ptr = std::shared_ptr<Participant>;
+_EXPORT using Participant_ptr = std::shared_ptr<Participant>;
 
-export struct Player {
+_EXPORT struct Player {
     Participant_ptr participant;
     std::string name;
     Role role;
@@ -122,7 +124,7 @@ public:
     }
 };
 
-export class Contest {
+_EXPORT class Contest {
 public:
     enum class Status {
         NOT_PREPARED,

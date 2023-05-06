@@ -9,7 +9,9 @@
 //
 
 #pragma once
-#define export
+#ifndef _EXPORT
+#define _EXPORT
+#endif
 
 #include <asio/awaitable.hpp>
 #include <asio/co_spawn.hpp>
@@ -154,7 +156,7 @@ public:
             break;
         }
         case OpCode::GIVEUP_OP: {
-            auto role { data2 == "b" ? Role::BLACK : data2 == "w" ? Role::WHITE
+            auto role { data1 == "b" ? Role::BLACK : data1 == "w" ? Role::WHITE
                                                                   : Role::NONE };
             auto player { contest.players.at(role, participant) };
 
@@ -320,14 +322,18 @@ awaitable<void> listener(tcp::acceptor acceptor, bool is_local = false)
     }
 }
 
-export void launch_server(std::vector<asio::ip::port_type> ports)
+_EXPORT void launch_server(std::vector<asio::ip::port_type> ports)
 {
     try {
         asio::io_context io_context(1);
 
-        co_spawn(io_context, listener(tcp::acceptor(io_context, { tcp::v4(), ports[0] }), true), detached);
+        tcp::endpoint local { tcp::v4(), ports[0] };
+        co_spawn(io_context, listener(tcp::acceptor(io_context, local), true), detached);
+        std::cout << "Serving on " << local << std::endl;
         for (auto port : ports | std::views::drop(1)) {
-            co_spawn(io_context, listener(tcp::acceptor(io_context, { tcp::v4(), port })), detached);
+            tcp::endpoint ep { tcp::v4(), port };
+            co_spawn(io_context, listener(tcp::acceptor(io_context, ep)), detached);
+            std::cout << "Serving on " << ep << std::endl;
         }
 
         asio::signal_set signals(io_context, SIGINT, SIGTERM);

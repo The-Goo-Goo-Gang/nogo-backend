@@ -1,5 +1,7 @@
 #pragma once
-#define export
+#ifndef _EXPORT
+#define _EXPORT
+#endif 
 
 #include <array>
 #include <ctime>
@@ -35,7 +37,7 @@ void from_json(const nlohmann::json& j, std::optional<T>& v)
 }
 }
 
-export struct UiMessage : public Message {
+_EXPORT struct UiMessage : public Message {
     struct DynamicStatistics {
         string id, name, value;
         NLOHMANN_DEFINE_TYPE_INTRUSIVE(DynamicStatistics, id, name, value)

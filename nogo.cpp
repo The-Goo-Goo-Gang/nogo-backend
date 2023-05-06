@@ -1,3 +1,6 @@
+#ifndef _EXPORT
+#define _EXPORT
+#endif
 #include <iostream>
 #include <ranges>
 #include <vector>
