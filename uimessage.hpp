@@ -60,11 +60,11 @@ _EXPORT struct UiMessage : public Message {
         PlayerData player_opposing, player_our;
         int turn_timeout;
         GameMetadata() = default;
-        GameMetadata(const PlayerList& players)
+        GameMetadata(const Contest& contest)
             : size(rank_n)
-            , player_opposing(PlayerData(players.at(Role::WHITE)))
-            , player_our(PlayerData(players.at(Role::BLACK)))
-            , turn_timeout(0)
+            , player_opposing(PlayerData(contest.players.at(Role::WHITE)))
+            , player_our(PlayerData(contest.players.at(Role::BLACK)))
+            , turn_timeout(contest.timeout_ms.count() / 1000)
         {
         }
         NLOHMANN_DEFINE_TYPE_INTRUSIVE(GameMetadata, size, player_opposing, player_our, turn_timeout)
@@ -88,7 +88,7 @@ _EXPORT struct UiMessage : public Message {
         Game() = default;
         Game(const Contest& contest)
             : is_our_player_playing(contest.current.role == Role::BLACK || contest.current.role != Role::NONE)
-            , metadata(GameMetadata(contest.players))
+            , metadata(GameMetadata(contest))
         {
             const auto board = contest.current.board.to_2darray();
             for (int i = 0; i < rank_n; ++i)
