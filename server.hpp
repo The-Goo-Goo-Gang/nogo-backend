@@ -26,7 +26,6 @@
 #include <asio/use_awaitable.hpp>
 #include <asio/write.hpp>
 
-
 #include <chrono>
 #include <deque>
 #include <iostream>
@@ -326,6 +325,7 @@ void start_session(asio::io_context& io_context, Room& room, asio::error_code& e
     tcp::socket socket { io_context };
     socket.connect(tcp::endpoint(asio::ip::make_address(ip_address), std::stoi(port)), ec);
     if (!ec)
+        std::make_shared<Session>(std::move(socket), room, false)->start();
 }
 
 awaitable<void> listener(tcp::acceptor acceptor, Room& room, bool is_local = false)
