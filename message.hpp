@@ -27,6 +27,7 @@ _EXPORT enum class OpCode : int {
     LOCAL_GAME_TIMEOUT_OP,
     LOCAL_GAME_MOVE_OP,
     CONNECT_TO_REMOTE_OP,
+    CONNECT_RESULT_OP,
 };
 
 _EXPORT enum class PlayerType {
