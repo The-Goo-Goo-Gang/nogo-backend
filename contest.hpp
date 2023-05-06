@@ -113,13 +113,13 @@ struct PlayerCouple {
 export class Contest {
 public:
     enum class Status {
-        NOT_PREPARED = 0,
+        NOT_PREPARED,
         ON_GOING,
         GAME_OVER,
     };
     bool should_giveup { false };
     enum class WinType {
-        NONE = 0,
+        NONE,
         TIMEOUT,
         SUICIDE,
         GIVEUP,
@@ -147,9 +147,6 @@ public:
         win_type = WinType {};
         winner = Role {};
         should_giveup = false;
-    }
-    Contest(){
-        clear();
     }
     void reject()
     {
