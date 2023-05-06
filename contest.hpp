@@ -217,4 +217,16 @@ public:
         result = { -player.role, WinType::TIMEOUT };
     }
     auto round() const { return moves.size(); }
+
+    auto encode() const -> string
+    {
+        std::string delimiter = " ";
+        std::string terminator = result.win_type == WinType::GIVEUP ? "G"
+            : result.win_type == WinType::TIMEOUT                   ? "T"
+                                                                    : "";
+        return (moves | std::views::transform([](auto pos) { return pos.to_string(); })
+                   | std::ranges::views::join_with(delimiter)
+                   | std::ranges::to<std::string>())
+            + delimiter + terminator;
+    }
 };
