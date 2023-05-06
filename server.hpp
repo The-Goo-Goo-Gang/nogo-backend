@@ -11,7 +11,7 @@
 #pragma once
 #ifndef _EXPORT
 #define _EXPORT
-#endif 
+#endif
 
 #include <asio/awaitable.hpp>
 #include <asio/co_spawn.hpp>
@@ -126,7 +126,7 @@ public:
             auto role { data1 == "b" ? Role::BLACK : data1 == "w" ? Role::WHITE
                                                                   : Role::NONE };
             auto player { contest.players[{ participant, role }] };
-            
+
             contest.concede(player);
 
             if (participant->is_local) {
@@ -288,9 +288,13 @@ _EXPORT void launch_server(std::vector<asio::ip::port_type> ports)
     try {
         asio::io_context io_context(1);
 
-        co_spawn(io_context, listener(tcp::acceptor(io_context, { tcp::v4(), ports[0] }), true), detached);
+        tcp::endpoint local { tcp::v4(), ports[0] };
+        co_spawn(io_context, listener(tcp::acceptor(io_context, local), true), detached);
+        std::cout << "Serving on " << local << std::endl;
         for (auto port : ports | std::views::drop(1)) {
-            co_spawn(io_context, listener(tcp::acceptor(io_context, { tcp::v4(), port })), detached);
+            tcp::endpoint ep { tcp::v4(), port };
+            std::cout << "Serving on " << local << std::endl;
+            co_spawn(io_context, listener(tcp::acceptor(io_context, ep)), detached);
         }
 
         asio::signal_set signals(io_context, SIGINT, SIGTERM);
