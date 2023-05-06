@@ -1,7 +1,7 @@
 #pragma once
 #ifndef _EXPORT
 #define _EXPORT
-#endif 
+#endif
 
 #include <algorithm>
 #include <array>
@@ -31,9 +31,13 @@ _EXPORT struct Position {
     }
     constexpr explicit operator bool() const { return x >= 0 && y >= 0; }
     // constexpr auto operator<=>(const Position& p) const = default;
-    auto to_string() const
+    auto to_string() const -> std::string
     {
-        return std::string { char('A' + x), char('1' + y) };
+        return { char('A' + x), char('1' + y) }; // FIXME: 11-way board will fail!
+    }
+    constexpr explicit Position(auto str)
+        : Position(str[0] - 'A', str[1] - '1') // FIXME: 11-way board will fail!
+    {
     }
 };
 
@@ -55,6 +59,18 @@ _EXPORT struct Role {
     constexpr auto operator<=>(const Role&) const = default;
     constexpr auto operator-() const { return Role(-id); }
     constexpr explicit operator bool() { return id; }
+
+    auto to_string() const -> std::string
+    {
+        return map("BLACK", "WHITE", "NONE");
+    }
+
+    explicit constexpr Role(auto str)
+        : Role(str == "b"    ? 1
+                : str == "w" ? -1
+                             : 0)
+    {
+    }
 
 private:
     constexpr explicit Role(int id)

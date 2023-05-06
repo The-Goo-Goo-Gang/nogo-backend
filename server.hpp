@@ -51,13 +51,6 @@ using std::chrono::system_clock;
 
 constexpr auto TIMEOUT { 3000ms };
 
-auto trim(std::string_view sv)
-{
-    sv.remove_prefix(std::min(sv.find_first_not_of(" \t\r\n"), sv.size()));
-    sv.remove_suffix(std::min(sv.size() - sv.find_last_not_of(" \t\r\n") - 1, sv.size()));
-    return sv;
-}
-
 class Room;
 
 void start_session(asio::io_context&, Room&, asio::error_code&, const string& ip_address, const string& port);
@@ -110,8 +103,7 @@ public:
             break;
         }
         case OpCode::LOCAL_GAME_TIMEOUT_OP: {
-            auto role { data1 == "b" ? Role::BLACK : data1 == "w" ? Role::WHITE
-                                                                  : Role::NONE };
+            Role role { data1 };
             auto player { contest.players.at(role, participant) };
 
             contest.timeout(player);
@@ -124,13 +116,13 @@ public:
         }
 
         case OpCode::READY_OP: {
-            Role role { data2 == "b" ? Role::BLACK : data2 == "w" ? Role::WHITE
-                                                                  : Role::NONE }; // or strict?
-            auto name { trim(data1) };
+            auto name { data1 };
+            Role role { data2 };
             if (!Player::is_valid_name(name))
                 name = "Player" + std::to_string(contest.players.size() + 1);
+
             Player player { participant, name, role, PlayerType::REMOTE_HUMAN_PLAYER };
-            contest.enroll(player);
+            contest.enroll(std::move(player));
             break;
         }
         case OpCode::REJECT_OP: {
@@ -138,12 +130,13 @@ public:
             break;
         }
         case OpCode::MOVE_OP: {
+            timer_cancelled_ = true;
             timer_.cancel();
-            Position pos { data1[0] - 'A', data1[1] - '1' }; // 11-way board will fail!
-            // auto role { data2 == "b" ? Role::BLACK : data2 == "w" ? Role::WHITE
-            //                                                      : Role::NONE };
+            
+            Position pos { data1 };
+            milliseconds ms { std::stoull(std::string { data2 }) };
 
-            milliseconds ms { std::stoull(msg.data2) };
+            // TODO: adjust time
 
             auto player { contest.players.at(Role::NONE, participant) };
             auto opponent { contest.players.at(-player.role) };
@@ -154,9 +147,10 @@ public:
                 participant->deliver(UiMessage(contest));
             }
 
+            timer_cancelled_ = false;
             timer_.expires_after(TIMEOUT);
             timer_.async_wait([this, opponent](const asio::error_code& ec) {
-                if (!ec) {
+                if (!ec && !timer_cancelled_) {
                     contest.timeout(opponent);
                     opponent.participant->deliver({ OpCode::TIMEOUT_END_OP });
                 }
@@ -172,8 +166,7 @@ public:
             break;
         }
         case OpCode::GIVEUP_OP: {
-            auto role { data1 == "b" ? Role::BLACK : data1 == "w" ? Role::WHITE
-                                                                  : Role::NONE };
+            Role role { data2 };
             auto player { contest.players.at(role, participant) };
 
             contest.concede(player);
@@ -231,6 +224,7 @@ public:
     }
 
 private:
+    bool timer_cancelled_ { false };
     asio::steady_timer timer_;
     asio::io_context& io_context_;
 

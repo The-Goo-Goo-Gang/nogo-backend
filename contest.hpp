@@ -1,7 +1,7 @@
 #pragma once
 #ifndef _EXPORT
 #define _EXPORT
-#endif 
+#endif
 
 #include <algorithm>
 #include <cctype>
@@ -39,6 +39,11 @@ public:
     virtual void deliver(Message msg) = 0;
     virtual void stop() = 0;
     virtual bool operator==(const Participant&) const = 0;
+
+    auto to_string() const
+    {
+        return endpoint().address().to_string();
+    }
 };
 
 _EXPORT using Participant_ptr = std::shared_ptr<Participant>;
@@ -174,12 +179,12 @@ public:
         players = {};
     }
 
-    void enroll(Player player)
+    void enroll(Player&& player)
     {
         if (status != Status::NOT_PREPARED)
             throw std::logic_error("Contest already started");
 
-        players.insert(std::move(player));
+        players.insert(player);
         if (players.contains(Role::BLACK) && players.contains(Role::WHITE))
             status = Status::ON_GOING;
     }
