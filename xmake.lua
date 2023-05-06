@@ -13,9 +13,11 @@ target("nogo")
     add_packages("range-v3")
     add_files("nogo.cpp", "res.rc")
     set_basename("nogo-server")
+--[[
 target("test")
     set_kind("binary")
     add_packages("asio", "nlohmann_json","spdlog","gtest")
     add_packages("range-v3")
     add_files("test.cpp")
     set_basename("nogo-test")
+--]]
