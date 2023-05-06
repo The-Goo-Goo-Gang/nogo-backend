@@ -332,8 +332,8 @@ _EXPORT void launch_server(std::vector<asio::ip::port_type> ports)
         std::cout << "Serving on " << local << std::endl;
         for (auto port : ports | std::views::drop(1)) {
             tcp::endpoint ep { tcp::v4(), port };
-            std::cout << "Serving on " << local << std::endl;
             co_spawn(io_context, listener(tcp::acceptor(io_context, ep)), detached);
+            std::cout << "Serving on " << ep << std::endl;
         }
 
         asio::signal_set signals(io_context, SIGINT, SIGTERM);
