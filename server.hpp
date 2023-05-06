@@ -123,7 +123,7 @@ public:
             break;
         }
         case OpCode::GIVEUP_OP: {
-            auto role { data2 == "b" ? Role::BLACK : data2 == "w" ? Role::WHITE
+            auto role { data1 == "b" ? Role::BLACK : data1 == "w" ? Role::WHITE
                                                                   : Role::NONE };
             auto player { contest.players[{ participant, role }] };
             
