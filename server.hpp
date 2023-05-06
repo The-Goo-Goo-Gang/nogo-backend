@@ -137,11 +137,14 @@ public:
             break;
         }
         case OpCode::MOVE_OP: {
+            timer_cancelled_ = true;
             timer_.cancel();
 
             Position pos { data1 };
 
             milliseconds ms { std::stoull(msg.data2) };
+
+            // TODO: adjust time
 
             auto player { contest.players.at(Role::NONE, participant) };
             auto opponent { contest.players.at(-player.role) };
@@ -152,9 +155,10 @@ public:
                 participant->deliver(UiMessage(contest));
             }
 
+            timer_cancelled_ = false;
             timer_.expires_after(TIMEOUT);
             timer_.async_wait([this, opponent](const asio::error_code& ec) {
-                if (!ec) {
+                if (!ec && !timer_cancelled_) {
                     contest.timeout(opponent);
                     opponent.participant->deliver({ OpCode::TIMEOUT_END_OP });
                 }
@@ -228,6 +232,7 @@ public:
     }
 
 private:
+    bool timer_cancelled_ { false };
     asio::steady_timer timer_;
     asio::io_context& io_context_;
 
