@@ -82,12 +82,12 @@ _EXPORT struct UiMessage : public Message {
     };
     struct Game {
         std::array<std::array<int, rank_n>, rank_n> chessboard;
-        bool is_our_player_playing;
+        int now_playing;
         GameMetadata metadata;
         std::vector<DynamicStatistics> statistics;
         Game() = default;
         Game(const Contest& contest)
-            : is_our_player_playing(contest.current.role == Role::BLACK || contest.current.role != Role::NONE)
+            : now_playing(contest.current.role.id)
             , metadata(GameMetadata(contest))
         {
             const auto board = contest.current.board.to_2darray();
@@ -95,7 +95,7 @@ _EXPORT struct UiMessage : public Message {
                 for (int j = 0; j < rank_n; ++j)
                     chessboard[i][j] = board[i][j].id;
         }
-        NLOHMANN_DEFINE_TYPE_INTRUSIVE(Game, chessboard, is_our_player_playing, metadata, statistics)
+        NLOHMANN_DEFINE_TYPE_INTRUSIVE(Game, chessboard, now_playing, metadata, statistics)
     };
     struct UiState {
         bool is_gaming;
