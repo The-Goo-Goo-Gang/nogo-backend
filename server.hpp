@@ -309,14 +309,8 @@ private:
     std::deque<Message> write_msgs_;
 };
 
-awaitable<void> listener(tcp::acceptor acceptor, bool is_local = false)
+awaitable<void> listener(tcp::acceptor acceptor, Room& room, bool is_local = false)
 {
-    // This is safe because the acceptor was created with an io_context object
-    asio::execution_context& ec = acceptor.get_executor().context();
-    asio::io_context& io_context = static_cast<asio::io_context&>(ec);
-
-    Room room { io_context };
-
     for (;;) {
         std::make_shared<Session>(co_await acceptor.async_accept(use_awaitable), room, is_local)->start();
     }
@@ -326,13 +320,14 @@ _EXPORT void launch_server(std::vector<asio::ip::port_type> ports)
 {
     try {
         asio::io_context io_context(1);
+        Room room { io_context };
 
         tcp::endpoint local { tcp::v4(), ports[0] };
-        co_spawn(io_context, listener(tcp::acceptor(io_context, local), true), detached);
+        co_spawn(io_context, listener(tcp::acceptor(io_context,, local), room, true), detached);
         std::cout << "Serving on " << local << std::endl;
         for (auto port : ports | std::views::drop(1)) {
             tcp::endpoint ep { tcp::v4(), port };
-            co_spawn(io_context, listener(tcp::acceptor(io_context, ep)), detached);
+            co_spawn(io_context, listener(tcp::acceptor(io_context, ep), room), detached);
             std::cout << "Serving on " << ep << std::endl;
         }
 
