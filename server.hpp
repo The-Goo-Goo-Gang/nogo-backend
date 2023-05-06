@@ -70,7 +70,7 @@ public:
     */
     void process_data(Message msg, Participant_ptr participant)
     {
-        logger->info("process_data: {} from {}",msg.to_string(),(long long int)std::addressof(*participant));
+        logger->info("process_data: {} from {}:{}",msg.to_string(),participant->endpoint().address().to_string(),participant->endpoint().port());
         string_view data1 { msg.data1 }, data2 { msg.data2 };
 
         switch (msg.op) {
@@ -192,7 +192,7 @@ public:
     }
     void join(Participant_ptr participant)
     {
-        logger->info("{} join",(long long int)std::addressof(*participant));
+        logger->info("{}:{} join",participant->endpoint().address().to_string(),participant->endpoint().port());
         participants_.insert(participant);
         for (auto msg : recent_msgs_) {
             participant->deliver(msg);
@@ -201,7 +201,7 @@ public:
 
     void leave(Participant_ptr participant)
     {
-        logger->info("{} leave",(long long int)std::addressof(*participant));
+        logger->info("{}:{} leave",participant->endpoint().address().to_string(),participant->endpoint().port());
         participants_.erase(participant);
     }
 
@@ -213,7 +213,7 @@ public:
 
         for (auto p : participants_)
             if (p != participant){
-                logger->info("broadcast {} from {}",msg.to_string(),(long long int)std::addressof(*participant));
+                logger->info("broadcast {} from {}:{}",msg.to_string(),participant->endpoint().address().to_string(),participant->endpoint().port());
                 p->deliver(msg);
             }
     }
@@ -277,7 +277,8 @@ private:
         try {
             for (std::string read_msg;;) {
                 std::size_t n = co_await asio::async_read_until(socket_, asio::dynamic_buffer(read_msg, 1024), "\n", use_awaitable);
-
+                string temp = read_msg.substr(0, n);
+                logger->info("Receive Message{}",temp);
                 Message msg { read_msg.substr(0, n) };
                 room_.process_data(msg, shared_from_this());
 

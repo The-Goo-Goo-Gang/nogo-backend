@@ -123,8 +123,8 @@ public:
                 throw std::logic_error("No role for player");
             }
         }
-        logger->info("Insert player: participant:{}, name:{}, role:{}, type:{},",
-                    (long long int)std::addressof(player.participant), player.name, 
+        logger->info("Insert player: participant:{}:{}, name:{}, role:{}, type:{},",
+                    player.participant->endpoint().address().to_string(),player.participant->endpoint().port(), player.name, 
                     player.role.map("black","white","none"), (int)player.type);
         players.push_back(std::move(player));
     }
