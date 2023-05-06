@@ -184,7 +184,7 @@ public:
         if (status != Status::NOT_PREPARED)
             throw std::logic_error("Contest already started");
 
-        players.insert(player);
+        players.insert(std::move(player));
         if (players.contains(Role::BLACK) && players.contains(Role::WHITE))
             status = Status::ON_GOING;
     }

@@ -77,7 +77,7 @@ public:
             }
             Player player1 { participant, "BLACK", Role::BLACK, PlayerType::LOCAL_HUMAN_PLAYER },
                 player2 { participant, "WHITE", Role::WHITE, PlayerType::LOCAL_HUMAN_PLAYER };
-            contest.enroll(player1), contest.enroll(player2);
+            contest.enroll(std::move(player1)), contest.enroll(std::move(player2));
 
             if (participant->is_local) {
                 participant->deliver(UiMessage(contest));
