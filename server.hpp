@@ -41,6 +41,13 @@ using asio::redirect_error;
 using asio::use_awaitable;
 using asio::ip::tcp;
 
+auto trim(std::string_view sv)
+{
+    sv.remove_prefix(std::min(sv.find_first_not_of(" \t\r\n"), sv.size()));
+    sv.remove_suffix(std::min(sv.size() - sv.find_last_not_of(" \t\r\n") - 1, sv.size()));
+    return sv;
+}
+
 class Room {
     Contest contest;
     std::deque<std::string> chats;
@@ -94,7 +101,10 @@ public:
         case OpCode::READY_OP: {
             Role role { data2 == "b" ? Role::BLACK : data2 == "w" ? Role::WHITE
                                                                   : Role::NONE }; // or strict?
-            Player player { participant, data1, role, PlayerType::REMOTE_HUMAN_PLAYER };
+            auto name { trim(data1) };
+            if (!Player::is_valid_name(name))
+                name = "Player" + std::to_string(contest.players.size() + 1);
+            Player player { participant, name, role, PlayerType::REMOTE_HUMAN_PLAYER };
             contest.enroll(player);
             break;
         }

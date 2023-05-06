@@ -3,7 +3,6 @@
 
 #include <algorithm>
 #include <cctype>
-#include <map>
 #include <ranges>
 #include <stdexcept>
 #include <vector>
@@ -53,11 +52,10 @@ export struct Player {
     }
     auto operator<=>(const Player&) const = default;
 
-    auto name_valid()
+    static auto is_valid_name(std::string_view name)
     {
         return !name.empty() && std::ranges::all_of(name, [](auto c) { return std::isalnum(c) || c == '_'; });
     }
-    auto map(auto v_black, auto v_white) const { return role.map(v_black, v_white); }
 };
 
 class PlayerList {
@@ -108,6 +106,10 @@ public:
                 throw std::logic_error("No role for player");
         }
         players.push_back(std::move(player));
+    }
+    auto size() const
+    {
+        return players.size();
     }
 };
 
