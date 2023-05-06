@@ -24,6 +24,7 @@
 #include <asio/steady_timer.hpp>
 #include <asio/use_awaitable.hpp>
 #include <asio/write.hpp>
+#include <asio/error_code.hpp>
 
 #include <chrono>
 #include <deque>
@@ -56,6 +57,10 @@ auto trim(std::string_view sv)
     return sv;
 }
 
+class Room;
+
+void start_session(asio::io_context&, Room&, asio::error_code&, const string& ip_address, const string& port);
+
 class Room {
     Contest contest;
     std::deque<std::string> chats;
@@ -63,6 +68,7 @@ class Room {
 public:
     Room(asio::io_context& io_context)
         : timer_ { io_context }
+        , io_context_(io_context)
     {
     }
     /*
@@ -75,6 +81,11 @@ public:
 
         switch (msg.op) {
         case OpCode::UPDATE_UI_STATE_OP: {
+            break;
+        }
+        case OpCode::CONNECT_TO_REMOTE_OP: {
+            asio::error_code ec;
+            start_session(io_context_, *this, ec, msg.data1, msg.data2);
             break;
         }
         case OpCode::START_LOCAL_GAME_OP: {
@@ -216,6 +227,7 @@ public:
 
 private:
     asio::steady_timer timer_;
+    asio::io_context& io_context_;
 
     std::set<Participant_ptr> participants_;
     enum { max_recent_msgs = 100 };
@@ -308,6 +320,13 @@ private:
     Room& room_;
     std::deque<Message> write_msgs_;
 };
+
+void start_session(asio::io_context& io_context, Room& room, asio::error_code& ec, const string& ip_address, const string& port)
+{
+    tcp::socket socket { io_context };
+    socket.connect(tcp::endpoint(asio::ip::make_address(ip_address), std::stoi(port)), ec);
+    std::make_shared<Session>(std::move(socket), room, false)->start();
+}
 
 awaitable<void> listener(tcp::acceptor acceptor, Room& room, bool is_local = false)
 {
