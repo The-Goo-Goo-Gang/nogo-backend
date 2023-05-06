@@ -323,7 +323,7 @@ _EXPORT void launch_server(std::vector<asio::ip::port_type> ports)
         Room room { io_context };
 
         tcp::endpoint local { tcp::v4(), ports[0] };
-        co_spawn(io_context, listener(tcp::acceptor(io_context,, local), room, true), detached);
+        co_spawn(io_context, listener(tcp::acceptor(io_context, local), room, true), detached);
         std::cout << "Serving on " << local << std::endl;
         for (auto port : ports | std::views::drop(1)) {
             tcp::endpoint ep { tcp::v4(), port };
