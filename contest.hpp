@@ -7,6 +7,15 @@
 #include <stdexcept>
 #include <vector>
 
+#ifdef __GNUC__
+#include <range/v3/all.hpp>
+namespace ranges::views {
+auto join_with = join;
+};
+#else
+namespace ranges = std::ranges;
+#endif
+
 #include <asio/ip/tcp.hpp>
 using asio::ip::tcp;
 
@@ -224,9 +233,8 @@ public:
         std::string terminator = result.win_type == WinType::GIVEUP ? "G"
             : result.win_type == WinType::TIMEOUT                   ? "T"
                                                                     : "";
-        return (moves | std::views::transform([](auto pos) { return pos.to_string(); })
-                   | std::ranges::views::join_with(delimiter)
-                   | std::ranges::to<std::string>())
+        auto moves_str = moves | std::views::transform([](auto pos) { return pos.to_string(); });
+        return (moves_str | ranges::views::join_with(delimiter) | ranges::to<std::string>())
             + delimiter + terminator;
     }
 };
