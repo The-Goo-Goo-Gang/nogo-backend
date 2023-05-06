@@ -88,8 +88,10 @@ public:
     auto at(Role role, Participant_ptr participant = nullptr) -> Player&
     {
         auto it = find(role, participant);
-        if (!it)
+        if (!it){
+            logger->critical("Playerlist: Player not found");
             throw std::logic_error("Player not found");
+        }
         return static_cast<Player&>(*it);
     }
     auto at(Role role, Participant_ptr participant = nullptr) const
@@ -116,9 +118,14 @@ public:
                 player.role = Role::WHITE;
             else if (contains(Role::WHITE))
                 player.role = Role::BLACK;
-            else
+            else{
+                logger->critical("PlayerList::insert: No role for player");
                 throw std::logic_error("No role for player");
+            }
         }
+        logger->info("Insert player: participant:{}, name:{}, role:{}, type:{},",
+                    (long long int)std::addressof(player.participant), player.name, 
+                    player.role.map("black","white","none"), (int)player.type);
         players.push_back(std::move(player));
     }
     auto size() const
@@ -174,6 +181,7 @@ public:
         if (status != Status::NOT_PREPARED){
             logger->critical("Reject: Contest stautus is {}", (int)status);
             throw std::logic_error("Contest already started");
+        }
         players = {};
     }
 
@@ -195,7 +203,7 @@ public:
             throw std::logic_error("Contest not started");
         }
         if (current.role != player.role){
-            logger->critical("Play: In {}'s turn, " + player.name + " not allowed to play", current.role.map("black", "white"));
+            logger->critical("Play: In {}'s turn", current.role.map("black", "white", "none"));
             throw std::logic_error(player.name + " not allowed to play");
         }
         if (current.board[pos]){
@@ -222,7 +230,7 @@ public:
             throw std::logic_error("Contest not started");
         }
         if (players.at(current.role) != player) {
-            logger->critical("Concede: In {}'s turn," + player.name + " not allowed to concede",current.role.map("black","white"));
+            logger->critical("Concede: In {}'s turn",current.role.map("black","white","none"));
             throw std::logic_error(player.name + " not allowed to concede");
         }
         status = Status::GAME_OVER;
@@ -236,7 +244,7 @@ public:
             throw std::logic_error("Contest not started");
         }
         if (players.at(current.role) != player) {
-            logger->critical("Overtime: In {}'s turn," + player.name + " shouldn't overtime", current.role.map("black","white"));
+            logger->critical("Overtime: In {}'s turn", current.role.map("black","white","none"));
             throw std::logic_error("not in " + player.name + "'s turn");
         }
         status = Status::GAME_OVER;

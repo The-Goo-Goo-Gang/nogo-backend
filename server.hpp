@@ -70,7 +70,7 @@ public:
     */
     void process_data(Message msg, Participant_ptr participant)
     {
-        logger->info("process_data: {} from {}",msg.to_string(),(long long int)&*participant);
+        logger->info("process_data: {} from {}",msg.to_string(),(long long int)std::addressof(*participant));
         string_view data1 { msg.data1 }, data2 { msg.data2 };
 
         switch (msg.op) {
@@ -93,7 +93,6 @@ public:
             break;
         }
         case OpCode::LOCAL_GAME_TIMEOUT_OP: {
-            if(data1!="b" && data1!="w") logger->warn("Receive LOCAL_GAME_TIMEOUT_OP with invalid role {}",data1);
             auto role { data1 == "b" ? Role::BLACK : data1 == "w" ? Role::WHITE
                                                                   : Role::NONE };
             auto player { contest.players.at(role, participant) };
@@ -108,7 +107,6 @@ public:
         }
 
         case OpCode::READY_OP: {
-            if(data2!="b" && data2!="w") logger->warn("Receive READY_OP with invalid role {}",data2);
             Role role { data2 == "b" ? Role::BLACK : data2 == "w" ? Role::WHITE
                                                                   : Role::NONE }; // or strict?
             auto name { trim(data1) };
@@ -158,7 +156,6 @@ public:
             break;
         }
         case OpCode::GIVEUP_OP: {
-            if(data2!="b"&&data2!="w") logger->debug("Receive GIVEUP_OP with invalid role {}",data2);
             auto role { data2 == "b" ? Role::BLACK : data2 == "w" ? Role::WHITE
                                                                   : Role::NONE };
             auto player { contest.players.at(role, participant) };
@@ -195,7 +192,7 @@ public:
     }
     void join(Participant_ptr participant)
     {
-        logger->info("{} join",(long long int)&*participant);
+        logger->info("{} join",(long long int)std::addressof(*participant));
         participants_.insert(participant);
         for (auto msg : recent_msgs_) {
             participant->deliver(msg);
@@ -204,7 +201,7 @@ public:
 
     void leave(Participant_ptr participant)
     {
-        logger->info("{} leave",(long long int)&*participant);
+        logger->info("{} leave",(long long int)std::addressof(*participant));
         participants_.erase(participant);
     }
 
@@ -216,7 +213,7 @@ public:
 
         for (auto p : participants_)
             if (p != participant){
-                logger->info("broadcast {} from {}",msg.to_string(),(long long int)&*participant);
+                logger->info("broadcast {} from {}",msg.to_string(),(long long int)std::addressof(*participant));
                 p->deliver(msg);
             }
     }
@@ -261,7 +258,7 @@ public:
 
     void deliver(Message msg) override
     {
-        logger->info("deliver: {} to {}", msg.to_string(), (long long int)&*this);
+        logger->info("deliver: {} to {}", msg.to_string(), (long long int)this);
         std::cout << "deliver " << msg.to_string() << std::endl;
         write_msgs_.push_back(msg);
         timer_.cancel_one();
