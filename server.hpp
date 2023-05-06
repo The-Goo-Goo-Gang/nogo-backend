@@ -16,6 +16,7 @@
 #include <asio/awaitable.hpp>
 #include <asio/co_spawn.hpp>
 #include <asio/detached.hpp>
+#include <asio/error_code.hpp>
 #include <asio/io_context.hpp>
 #include <asio/ip/tcp.hpp>
 #include <asio/read_until.hpp>
@@ -24,7 +25,7 @@
 #include <asio/steady_timer.hpp>
 #include <asio/use_awaitable.hpp>
 #include <asio/write.hpp>
-#include <asio/error_code.hpp>
+
 
 #include <chrono>
 #include <deque>
@@ -68,7 +69,7 @@ class Room {
 public:
     Room(asio::io_context& io_context)
         : timer_ { io_context }
-        , io_context_(io_context)
+        , io_context_ { io_context }
     {
     }
     /*
@@ -138,7 +139,6 @@ public:
         }
         case OpCode::MOVE_OP: {
             timer_.cancel();
-
             Position pos { data1[0] - 'A', data1[1] - '1' }; // 11-way board will fail!
             // auto role { data2 == "b" ? Role::BLACK : data2 == "w" ? Role::WHITE
             //                                                      : Role::NONE };
@@ -330,7 +330,7 @@ void start_session(asio::io_context& io_context, Room& room, asio::error_code& e
 {
     tcp::socket socket { io_context };
     socket.connect(tcp::endpoint(asio::ip::make_address(ip_address), std::stoi(port)), ec);
-    if (!ec) std::make_shared<Session>(std::move(socket), room, false)->start();
+    if (!ec)
 }
 
 awaitable<void> listener(tcp::acceptor acceptor, Room& room, bool is_local = false)
