@@ -1,7 +1,7 @@
 #pragma once
 #ifndef _EXPORT
 #define _EXPORT
-#endif 
+#endif
 
 #include <algorithm>
 #include <array>
@@ -33,10 +33,10 @@ _EXPORT struct Position {
     // constexpr auto operator<=>(const Position& p) const = default;
     auto to_string() const -> std::string
     {
-        return { char('A' + x), char('1' + y) }; // 11-way board will fail!
+        return { char('A' + x), char('1' + y) }; // FIXME: 11-way board will fail!
     }
     constexpr explicit Position(auto str)
-        : Position(str[0] - 'A', str[1] - '1') // 11-way board will fail!
+        : Position(str[0] - 'A', str[1] - '1') // FIXME: 11-way board will fail!
     {
     }
 };

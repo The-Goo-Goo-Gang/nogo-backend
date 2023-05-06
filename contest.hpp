@@ -1,7 +1,7 @@
 #pragma once
 #ifndef _EXPORT
 #define _EXPORT
-#endif 
+#endif
 
 #include <algorithm>
 #include <cctype>
@@ -179,12 +179,12 @@ public:
         players = {};
     }
 
-    void enroll(Player player)
+    void enroll(Player&& player)
     {
         if (status != Status::NOT_PREPARED)
             throw std::logic_error("Contest already started");
 
-        players.insert(std::move(player));
+        players.insert(player);
         if (players.contains(Role::BLACK) && players.contains(Role::WHITE))
             status = Status::ON_GOING;
     }

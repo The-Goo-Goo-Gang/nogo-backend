@@ -49,13 +49,6 @@ using std::chrono::system_clock;
 
 constexpr auto TIMEOUT { 3000ms };
 
-auto trim(std::string_view sv)
-{
-    sv.remove_prefix(std::min(sv.find_first_not_of(" \t\r\n"), sv.size()));
-    sv.remove_suffix(std::min(sv.size() - sv.find_last_not_of(" \t\r\n") - 1, sv.size()));
-    return sv;
-}
-
 class Room {
     Contest contest;
     std::deque<std::string> chats;
@@ -106,13 +99,13 @@ public:
         }
 
         case OpCode::READY_OP: {
+            auto name { data1 };
             Role role { data2 };
-            auto name { trim(data1) };
             if (!Player::is_valid_name(name))
                 name = "Player" + std::to_string(contest.players.size() + 1);
 
             Player player { participant, name, role, PlayerType::REMOTE_HUMAN_PLAYER };
-            contest.enroll(player);
+            contest.enroll(std::move(player));
             break;
         }
         case OpCode::REJECT_OP: {
