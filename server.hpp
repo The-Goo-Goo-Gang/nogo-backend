@@ -127,7 +127,7 @@ public:
             // auto role { data2 == "b" ? Role::BLACK : data2 == "w" ? Role::WHITE
             //                                                      : Role::NONE };
 
-            milliseconds ms { std::stoull(std::string { data2 }) };
+            milliseconds ms { std::stoull(msg.data2) };
 
             auto player { contest.players.at(Role::NONE, participant) };
             auto opponent { contest.players.at(-player.role) };
