@@ -39,6 +39,11 @@ public:
     virtual void deliver(Message msg) = 0;
     virtual void stop() = 0;
     virtual bool operator==(const Participant&) const = 0;
+
+    auto to_string() const
+    {
+        return endpoint().address().to_string();
+    }
 };
 
 _EXPORT using Participant_ptr = std::shared_ptr<Participant>;

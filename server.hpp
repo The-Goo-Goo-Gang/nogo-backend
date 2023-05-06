@@ -93,8 +93,7 @@ public:
             break;
         }
         case OpCode::LOCAL_GAME_TIMEOUT_OP: {
-            auto role { data1 == "b" ? Role::BLACK : data1 == "w" ? Role::WHITE
-                                                                  : Role::NONE };
+            Role role { data1 };
             auto player { contest.players.at(role, participant) };
 
             contest.timeout(player);
@@ -107,11 +106,11 @@ public:
         }
 
         case OpCode::READY_OP: {
-            Role role { data2 == "b" ? Role::BLACK : data2 == "w" ? Role::WHITE
-                                                                  : Role::NONE }; // or strict?
+            Role role { data2 };
             auto name { trim(data1) };
             if (!Player::is_valid_name(name))
                 name = "Player" + std::to_string(contest.players.size() + 1);
+
             Player player { participant, name, role, PlayerType::REMOTE_HUMAN_PLAYER };
             contest.enroll(player);
             break;
@@ -123,9 +122,7 @@ public:
         case OpCode::MOVE_OP: {
             timer_.cancel();
 
-            Position pos { data1[0] - 'A', data1[1] - '1' }; // 11-way board will fail!
-            // auto role { data2 == "b" ? Role::BLACK : data2 == "w" ? Role::WHITE
-            //                                                      : Role::NONE };
+            Position pos { data1 };
 
             milliseconds ms { std::stoull(std::string { data2 }) };
 
@@ -156,8 +153,7 @@ public:
             break;
         }
         case OpCode::GIVEUP_OP: {
-            auto role { data1 == "b" ? Role::BLACK : data1 == "w" ? Role::WHITE
-                                                                  : Role::NONE };
+            Role role { data2 };
             auto player { contest.players.at(role, participant) };
 
             contest.concede(player);
