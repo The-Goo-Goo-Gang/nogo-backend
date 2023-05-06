@@ -23,8 +23,9 @@ _EXPORT enum class OpCode : int {
     //-----Extend OpCode ------------
     START_LOCAL_GAME_OP = 100000,
     UPDATE_UI_STATE_OP,
-    // TODO: Only for temporary use, need to be removed in stage 2
+    // Deprecated
     LOCAL_GAME_TIMEOUT_OP,
+    LOCAL_GAME_MOVE_OP,
     CONNECT_TO_REMOTE_OP,
 };
 
