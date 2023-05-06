@@ -29,9 +29,9 @@ export struct Position {
     }
     constexpr explicit operator bool() const { return x >= 0 && y >= 0; }
     // constexpr auto operator<=>(const Position& p) const = default;
-    friend auto operator<<(std::ostream& os, Position p) -> std::ostream&
+    auto to_string() const
     {
-        return os << '(' << p.x << ", " << p.y << ')';
+        return std::string { char('A' + x), char('1' + y) };
     }
 };
 
@@ -44,15 +44,11 @@ export struct Role {
     {
     }
 
-    constexpr decltype(auto) map(auto&& v_black, auto&& v_white) const
-    {
-        return id == 1 ? v_black : id == -1 ? v_white
-                                            : throw std::runtime_error("invalid role");
-    }
     constexpr decltype(auto) map(auto&& v_black, auto&& v_white, auto&& v_none) const
     {
-        return id == 1 ? v_black : id == -1 ? v_white
-                                            : v_none;
+        return id == 1 ? v_black
+            : id == -1 ? v_white
+                       : v_none;
     }
     constexpr auto operator<=>(const Role&) const = default;
     constexpr auto operator-() const { return Role(-id); }

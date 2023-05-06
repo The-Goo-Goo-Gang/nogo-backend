@@ -3,10 +3,18 @@
 
 #include <algorithm>
 #include <cctype>
-#include <map>
 #include <ranges>
 #include <stdexcept>
 #include <vector>
+
+#ifdef __GNUC__
+#include <range/v3/all.hpp>
+namespace ranges::views {
+auto join_with = join;
+};
+#else
+namespace ranges = std::ranges;
+#endif
 
 #include <asio/ip/tcp.hpp>
 using asio::ip::tcp;
@@ -54,59 +62,68 @@ export struct Player {
     }
     auto operator<=>(const Player&) const = default;
 
-    auto name_valid()
+    static auto is_valid_name(std::string_view name)
     {
         return !name.empty() && std::ranges::all_of(name, [](auto c) { return std::isalnum(c) || c == '_'; });
     }
-    auto map(auto v_black, auto v_white) const { return role.map(v_black, v_white); }
-    auto empty() const { return !participant; }
 };
 
-struct PlayerCouple {
-    Player player1, player2;
-    auto operator[](Role role) -> Player& { return role.map(player1, player2); }
-    auto operator[](Participant_ptr participant) -> Player&
+class PlayerList {
+    std::vector<Player> players;
+
+public:
+    auto find(Role role, Participant_ptr participant = nullptr)
     {
-        if (*player1.participant == *participant)
-            return player1;
-        if (*player2.participant == *participant)
-            return player2;
-        logger->critical("PlayerCouple: Participant not in couple");
-        throw std::logic_error("Participant not in couple");
+        // If the criteria is valid, the player must match it
+        auto it = std::ranges::find_if(players, [&](auto& p) {
+            return (!role || p.role == role) && (!participant || p.participant == participant);
+        });
+        return it == players.end() ? nullptr : std::addressof(*it);
     }
-    auto operator[](Player player) -> Player&
+    auto find(Role role, Participant_ptr participant = nullptr) const
     {
-        if (player.role == Role::NONE) {
-            return player.participant == player1.participant ? player1 : player2;
-        } else {
-            return player.role.map(player1, player2);
-        }
+        return static_cast<const Player*>(const_cast<PlayerList*>(this)->find(role, participant));
     }
-    auto contains(Role role) const
+
+    auto at(Role role, Participant_ptr participant = nullptr) -> Player&
     {
-        return !role.map(player1, player2).empty();
+        auto it = find(role, participant);
+        if (!it)
+            throw std::logic_error("Player not found");
+        return static_cast<Player&>(*it);
     }
-    auto contains(Participant_ptr participant) const
+    auto at(Role role, Participant_ptr participant = nullptr) const
     {
-        return (player1.participant && *player1.participant == *participant)
-            || (player2.participant && *player2.participant == *participant);
+        return static_cast<const Player&>(const_cast<PlayerList*>(this)->at(role, participant));
+    }
+
+    auto contains(Role role, Participant_ptr participant = nullptr) const
+    {
+        return find(role, participant) != nullptr;
     }
     auto insert(Player&& player)
     {
-        if (!player1.empty() && !player2.empty()){
+        if (std::ranges::find(players, player) != players.end()) {
             logger->critical("Insert player: Couple already full");
-            throw std::logic_error("Couple already full");
+            throw std::logic_error("Player already in list");
         }
-        if (contains(player.role)){
+        if (contains(player.role)) {
             logger->critical("Insert player: {} role already occupied",player.role.map("black","white","none"));
             throw std::logic_error("Role already occupied");
         }
-        player.role.map(player1, player2) = std::move(player);
+        if (player.role == Role::NONE) {
+            if (contains(Role::BLACK))
+                player.role = Role::WHITE;
+            else if (contains(Role::WHITE))
+                player.role = Role::BLACK;
+            else
+                throw std::logic_error("No role for player");
+        }
+        players.push_back(std::move(player));
     }
-    void clear() { player1 = player2 = Player {}; }
-    auto opposite(Player player) -> Player&
+    auto size() const
     {
-        return player.role.map(player2, player1);
+        return players.size();
     }
 };
 
@@ -117,12 +134,15 @@ public:
         ON_GOING,
         GAME_OVER,
     };
-    bool should_giveup { false };
     enum class WinType {
         NONE,
         TIMEOUT,
         SUICIDE,
         GIVEUP,
+    };
+    struct GameResult {
+        Role winner;
+        Contest::WinType win_type;
     };
     class StonePositionitionOccupiedException : public std::logic_error {
         using std::logic_error::logic_error;
@@ -131,21 +151,22 @@ public:
         using runtime_error::runtime_error;
     };
 
+    bool should_giveup { false };
+
     State current {};
     std::vector<Position> moves;
-    PlayerCouple players;
+    PlayerList players;
 
     Status status;
-    WinType win_type;
-    Role winner;
+    GameResult result;
+
     void clear()
     {
-        current = State {};
+        current = {};
         moves.clear();
-        players.clear();
-        status = Status {};
-        win_type = WinType {};
-        winner = Role {};
+        players = {};
+        status = {};
+        result = {};
         should_giveup = false;
     }
     void reject()
@@ -153,8 +174,7 @@ public:
         if (status != Status::NOT_PREPARED){
             logger->critical("Reject: Contest stautus is {}", (int)status);
             throw std::logic_error("Contest already started");
-        }
-        players.clear();
+        players = {};
     }
 
     void enroll(Player player)
@@ -187,9 +207,9 @@ public:
         current = current.next_state(pos);
         moves.push_back(pos);
 
-        if ((winner = current.is_over())) {
+        if (auto winner = current.is_over()) {
             status = Status::GAME_OVER;
-            win_type = WinType::SUICIDE;
+            result = { winner, WinType::SUICIDE };
         }
         if (!current.available_actions().size())
             should_giveup = true;
@@ -197,32 +217,41 @@ public:
 
     void concede(Player player)
     {
-        if (status != Status::ON_GOING){
+        if (status != Status::ON_GOING) {
             logger->critical("Concede: Contest status is {}",(int)status);
             throw std::logic_error("Contest not started");
         }
-        if (players[current.role] != player){
+        if (players.at(current.role) != player) {
             logger->critical("Concede: In {}'s turn," + player.name + " not allowed to concede",current.role.map("black","white"));
             throw std::logic_error(player.name + " not allowed to concede");
         }
         status = Status::GAME_OVER;
-        win_type = WinType::GIVEUP;
-        winner = -player.role;
+        result = { -player.role, WinType::GIVEUP };
     }
 
-    void overtime(Player player)
+    void timeout(Player player)
     {
         if (status != Status::ON_GOING){
             logger->critical("Overtime: Contest status is {}",(int)status);
             throw std::logic_error("Contest not started");
         }
-        if (players[current.role] != player){
-            logger->critical("Overtime: In {}'s turn," + player.name + " shouldn't overtime",current.role.map("black","white"));
+        if (players.at(current.role) != player) {
+            logger->critical("Overtime: In {}'s turn," + player.name + " shouldn't overtime", current.role.map("black","white"));
             throw std::logic_error("not in " + player.name + "'s turn");
         }
         status = Status::GAME_OVER;
-        win_type = WinType::TIMEOUT;
-        winner = -player.role;
+        result = { -player.role, WinType::TIMEOUT };
     }
     auto round() const { return moves.size(); }
+
+    auto encode() const -> string
+    {
+        std::string delimiter = " ";
+        std::string terminator = result.win_type == WinType::GIVEUP ? "G"
+            : result.win_type == WinType::TIMEOUT                   ? "T"
+                                                                    : "";
+        auto moves_str = moves | std::views::transform([](auto pos) { return pos.to_string(); });
+        return (moves_str | ranges::views::join_with(delimiter) | ranges::to<std::string>())
+            + delimiter + terminator;
+    }
 };

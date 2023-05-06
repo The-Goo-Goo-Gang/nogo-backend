@@ -11,7 +11,10 @@ target("nogo")
     set_kind("binary")
     add_packages("asio", "nlohmann_json","spdlog")
     add_packages("range-v3")
-    add_files("nogo.cpp", "res.rc")
+    add_files("nogo.cpp")
+    if is_plat("windows") then
+        add_files("res.rc")
+    end
     set_basename("nogo-server")
 --[[
 target("test")
