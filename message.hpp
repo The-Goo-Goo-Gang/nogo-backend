@@ -25,7 +25,7 @@ _EXPORT enum class OpCode : int {
     UPDATE_UI_STATE_OP,
     // TODO: Only for temporary use, need to be removed in stage 2
     LOCAL_GAME_TIMEOUT_OP,
-    CONNECT_TO_REMOTE_OP
+    CONNECT_TO_REMOTE_OP,
 };
 
 _EXPORT enum class PlayerType {
