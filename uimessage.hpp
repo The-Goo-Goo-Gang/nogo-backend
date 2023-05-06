@@ -60,10 +60,10 @@ _EXPORT struct UiMessage : public Message {
         PlayerData player_opposing, player_our;
         int turn_timeout;
         GameMetadata() = default;
-        GameMetadata(const PlayerCouple& players)
+        GameMetadata(const PlayerList& players)
             : size(rank_n)
-            , player_opposing(PlayerData(players.player2))
-            , player_our(PlayerData(players.player1))
+            , player_opposing(PlayerData(players.at(Role::WHITE)))
+            , player_our(PlayerData(players.at(Role::BLACK)))
             , turn_timeout(0)
         {
         }
@@ -74,8 +74,8 @@ _EXPORT struct UiMessage : public Message {
         Contest::WinType win_type;
         GameResult() = default;
         GameResult(const Contest& contest)
-            : winner(contest.winner.id)
-            , win_type(contest.win_type)
+            : winner(contest.result.winner.id)
+            , win_type(contest.result.win_type)
             {
             }
         NLOHMANN_DEFINE_TYPE_INTRUSIVE(GameResult, winner, win_type)
@@ -87,7 +87,7 @@ _EXPORT struct UiMessage : public Message {
         std::vector<DynamicStatistics> statistics;
         Game() = default;
         Game(const Contest& contest)
-            : is_our_player_playing(contest.current.role == contest.players.player1.role)
+            : is_our_player_playing(contest.current.role == Role::BLACK || contest.current.role != Role::NONE)
             , metadata(GameMetadata(contest.players))
         {
             const auto board = contest.current.board.to_2darray();
