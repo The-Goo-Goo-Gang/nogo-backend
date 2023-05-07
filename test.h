@@ -4,9 +4,12 @@
 #include <iostream>
 #include <thread>
 #include "asio.hpp"
-#include "message.hpp"
-using asio::ip::tcp;
+#include "windows.h"
 
+using asio::ip::tcp;
+using namespace std;
+
+bool all_connected = false;
 class chat_client
 {
   public:
@@ -16,7 +19,7 @@ class chat_client
     {
         do_connect(endpoints);
     }
-    void write(const string& msg)
+    void write(string msg)
     {
     asio::post(io_context_,
         [this, msg]()
@@ -28,26 +31,31 @@ class chat_client
     }
     void close()
     {
+        all_connected = false;
         asio::post(io_context_, [this]() { socket_.close(); });
     }
-  private:
     void do_connect(const tcp::resolver::results_type& endpoints)
     {
         asio::async_connect(socket_, endpoints,[this](std::error_code ec, tcp::endpoint)
         {
             if (!ec) do_read();
+            else all_connected = false;
         });
     }
     void do_read()
     {
-    asio::async_read(socket_,asio::buffer(&read_msg_, sizeof(read_msg_)),[this](std::error_code ec, std::size_t /*length*/)
+        asio::async_read_until(socket_, asio::dynamic_buffer(read_msg_,4096), "\n", [this](std::error_code ec, std::size_t /*length*/)
         {
-          if (!ec)
-          {
-            read_msgs_.push_back(read_msg_);
-            do_read();
-          }
-          else socket_.close();
+            if (!ec)
+            {
+                read_msgs_.push_back(read_msg_);
+                read_msg_.erase();
+                do_read();
+            }
+            else{
+                all_connected = false;
+                socket_.close();
+            }
         });
     }
     void do_write()
@@ -56,17 +64,19 @@ class chat_client
         {
             if (!ec)
             {
-                std::cout<<"send "<<write_msgs_.front()<<"\n";
                 write_msgs_.pop_front();
                 if (!write_msgs_.empty())  do_write();
             }
-            else socket_.close();
+            else{ 
+                all_connected = false;
+                socket_.close();
+            }
         });
     }
-  private:
     asio::io_context& io_context_;
     tcp::socket socket_;
     string read_msg_;
-    std::deque<string> write_msgs_;
-    std::vector<string> read_msgs_;
+    deque<string> write_msgs_;
+    vector<string> read_msgs_;
 };
+

@@ -82,9 +82,9 @@ public:
             asio::error_code ec;
             start_session(io_context_, *this, ec, msg.data1, msg.data2);
             if (ec) {
-                std::cerr << "start_session failed: " << ec.message() << std::endl;
+                logger->error("start_session failed: {}", (string)ec.message());
             } else {
-                std::cout << "start_session success: " << msg.data1 << ":" << msg.data2 << std::endl;
+                logger->info("start_session success: {}:{}", msg.data1, msg.data2);
             }
             break;
         }
@@ -271,7 +271,6 @@ public:
     void deliver(Message msg) override
     {
         logger->info("deliver: {} to {}", msg.to_string(), (long long int)this);
-        std::cout << "deliver " << msg.to_string() << std::endl;
         write_msgs_.push_back(msg);
         timer_.cancel_one();
     }
@@ -297,7 +296,6 @@ private:
                 read_msg.erase(0, n);
             }
         } catch (std::exception& e) {
-            std::cerr << "Exception: " << e.what() << "\n";
             logger->error("Exception: {}", e.what());
             stop();
         }
@@ -317,7 +315,6 @@ private:
                 }
             }
         } catch (std::exception& e) {
-            std::cerr << "Exception: " << e.what() << "\n";
             logger->error("Exception: {}", e.what());
             stop();
         }
@@ -341,7 +338,7 @@ awaitable<void> listener(tcp::acceptor acceptor, Room& room, bool is_local = fal
 {
     for (;;) {
         std::make_shared<Session>(co_await acceptor.async_accept(use_awaitable), room, is_local)->start();
-        std::cout << "new connection to " << acceptor.local_endpoint() << std::endl;
+        logger->info("new connection to {}:{}", acceptor.local_endpoint().address().to_string(), acceptor.local_endpoint().port());
     }
 }
 
@@ -353,11 +350,11 @@ _EXPORT void launch_server(std::vector<asio::ip::port_type> ports)
 
         tcp::endpoint local { tcp::v4(), ports[0] };
         co_spawn(io_context, listener(tcp::acceptor(io_context, local), room, true), detached);
-        std::cout << "Serving on " << local << std::endl;
+        logger->info("Serving on {}:{}", local.address().to_string(), local.port());
         for (auto port : ports | std::views::drop(1)) {
             tcp::endpoint ep { tcp::v4(), port };
             co_spawn(io_context, listener(tcp::acceptor(io_context, ep), room), detached);
-            std::cout << "Serving on " << ep << std::endl;
+            logger->info("Serving on {}:{}", ep.address().to_string(), ep.port());
         }
 
         asio::signal_set signals(io_context, SIGINT, SIGTERM);
@@ -365,7 +362,6 @@ _EXPORT void launch_server(std::vector<asio::ip::port_type> ports)
 
         io_context.run();
     } catch (std::exception& e) {
-        std::cerr << "Exception: " << e.what() << "\n";
         logger->error("Exception: {}", e.what());
     }
 }
