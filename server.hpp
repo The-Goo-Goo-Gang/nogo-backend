@@ -60,13 +60,17 @@ class Room {
     Contest contest;
     std::deque<std::string> chats;
 
-    void deliver_ui_state()
+    void deliver_to_local(Message msg)
     {
-        Message msg { UiMessage { contest } };
         for (auto participant : participants_) {
             if (participant->is_local)
                 participant->deliver(msg);
         }
+    }
+
+    void deliver_ui_state()
+    {
+        deliver_to_local(UiMessage { contest });
     }
 
 public:
@@ -93,12 +97,15 @@ public:
             start_session(io_context_, *this, ec, data1, data2);
             if (ec) {
                 logger->error("start_session failed: {}", ec.message());
+                participant->deliver({ OpCode::CONNECT_RESULT_OP, "failed", ec.message() });
             } else {
                 logger->info("start_session success: {}:{}", data1, data2);
+                participant->deliver({ OpCode::CONNECT_RESULT_OP, "success", msg.data1 + ":" + msg.data2 });
             }
             break;
         }
         case OpCode::CONNECT_RESULT_OP: {
+            // should not be sent by client
             break;
         }
         case OpCode::START_LOCAL_GAME_OP: {
@@ -134,35 +141,58 @@ public:
 
             contest.play(player, pos);
 
-            timer_.expires_after(contest.duration);
-            timer_.async_wait([this, opponent](const asio::error_code& ec) {
-                if (!ec) {
-                    contest.timeout(opponent);
-                    opponent.participant->deliver({ OpCode::TIMEOUT_END_OP });
-                    deliver_ui_state();
-                }
-            });
+            if (contest.status == Contest::Status::ON_GOING) {
+                timer_.expires_after(contest.duration);
+                timer_.async_wait([this, opponent](const asio::error_code& ec) {
+                    if (!ec) {
+                        contest.timeout(opponent);
+                        opponent.participant->deliver({ OpCode::TIMEOUT_END_OP });
+                        deliver_ui_state();
+                    }
+                });
+            }
 
             deliver_ui_state();
             break;
         }
 
         case OpCode::READY_OP: {
+            std::cout << "ready: is_local = " << participant->is_local << ", data1 = " << data1 << ", data2 = " << data2 << std::endl;
+
             auto name { data1 };
             Role role { data2 };
             if (!Player::is_valid_name(name))
                 name = "Player" + std::to_string(contest.players.size() + 1);
-            Player player { participant, name, role, PlayerType::REMOTE_HUMAN_PLAYER };
-            contest.enroll(std::move(player));
+
+            if (participant->is_local) {
+                Player player { participant, name, role, PlayerType::LOCAL_HUMAN_PLAYER };
+                contest.enroll(std::move(player));
+                // TODO: support multiple remote waiting players
+                deliver_to_others(msg, participant);
+            } else {
+                Player player { participant, name, role, PlayerType::REMOTE_HUMAN_PLAYER };
+                contest.enroll(std::move(player));
+                deliver_to_local(msg);
+            }
+
+            deliver_ui_state();
             break;
         }
         case OpCode::REJECT_OP: {
             contest.reject();
+
+            if (participant->is_local) {
+                // TODO: support multiple remote waiting players
+                deliver_to_others(msg, participant);
+            } else {
+                deliver_to_local(msg);
+            }
             break;
         }
         case OpCode::MOVE_OP: {
             timer_cancelled_ = true;
             timer_.cancel();
+            std::cout << "timer canceled" << std::endl;
 
             Position pos { data1 };
             milliseconds ms { stoull(data2) };
@@ -177,18 +207,36 @@ public:
             contest.duration = TIMEOUT;
             timer_cancelled_ = false;
             timer_.expires_after(contest.duration);
-            timer_.async_wait([this, opponent](const asio::error_code& ec) {
+            timer_.async_wait([this, opponent, participant](const asio::error_code& ec) {
                 if (!ec && !timer_cancelled_) {
                     contest.timeout(opponent);
-                    opponent.participant->deliver({ OpCode::WIN_PENDING_OP, Contest::WinType::TIMEOUT });
-                    participant->deliver({ OpCode::TIMEOUT_END_OP });
+                    participant->deliver({ OpCode::WIN_PENDING_OP, std::to_string(std::to_underlying(Contest::WinType::TIMEOUT)) });
+                    opponent.participant->deliver({ OpCode::TIMEOUT_END_OP });
                 }
             });
 
-            deliver(msg, participant); // broadcast
+            deliver_to_others(msg, participant); // broadcast
             if (contest.result.winner == opponent.role) {
                 opponent.participant->deliver({ OpCode::WIN_PENDING_OP, Contest::WinType::SUICIDE });
                 participant->deliver({ OpCode::SUICIDE_END_OP });
+                deliver_to_others(msg, participant); // broadcast
+            } else if (contest.result.winner == player.role) {
+                participant->deliver({ OpCode::GIVEUP_OP });
+                opponent.participant->deliver({ OpCode::GIVEUP_END_OP }); // radical
+            }
+
+            if (contest.status == Contest::Status::ON_GOING) {
+                contest.duration = TIMEOUT;
+                std::cout << "timer restart" << std::endl;
+                timer_cancelled_ = false;
+                timer_.expires_after(contest.duration);
+                timer_.async_wait([this, opponent](const asio::error_code& ec) {
+                    if (!ec && !timer_cancelled_) {
+                        std::cout << "timer ended when " << opponent.name << " is thinking" << std::endl;
+                        contest.timeout(opponent);
+                        opponent.participant->deliver({ OpCode::TIMEOUT_END_OP });
+                    }
+                });
             }
 
             deliver_ui_state();
@@ -197,10 +245,13 @@ public:
         case OpCode::GIVEUP_OP: {
             Role role { data2 };
             auto player { contest.players.at(role, participant) };
+            auto opponent { contest.players.at(-player.role) };
 
             contest.concede(player);
             opponent.participant->deliver({ OpCode::WIN_PENDING_OP, Contest::WinType::GIVEUP });
             participant->deliver({ OpCode::GIVEUP_END_OP });
+            timer_cancelled_ = true;
+            timer_.cancel();
 
             deliver_ui_state();
             break;
@@ -209,7 +260,7 @@ public:
         case OpCode::TIMEOUT_END_OP:
         case OpCode::SUICIDE_END_OP:
         case OpCode::GIVEUP_END_OP: {
-            deliver(msg, participant); // broadcast
+            deliver_to_others(msg, participant); // broadcast
             break;
         }
 
@@ -254,17 +305,19 @@ public:
                 p->stop();
     }
 
-    void deliver(Message msg, Participant_ptr participant)
+    void deliver_to_others(Message msg, Participant_ptr participant)
     {
+        std::cout << "deliver to others: self = " << participant->endpoint() << std::endl;
         recent_msgs_.push_back(msg);
         while (recent_msgs_.size() > max_recent_msgs)
             recent_msgs_.pop_front();
 
-        for (auto p : participants_)
+        for (auto p : participants_) {
             if (p != participant) {
                 logger->info("broadcast {} from {}:{}", msg.to_string(), participant->endpoint().address().to_string(), participant->endpoint().port());
                 p->deliver(msg);
             }
+        }
     }
 
 private:
@@ -281,7 +334,7 @@ class Session : public Participant, public std::enable_shared_from_this<Session>
 public:
     tcp::endpoint endpoint() const override
     {
-        return socket_.remote_endpoint();
+        return socket_.local_endpoint();
     }
     bool operator==(const Participant& participant) const override
     {
@@ -307,7 +360,7 @@ public:
             socket_.get_executor(), [self = shared_from_this()] { return self->writer(); }, detached);
     }
 
-    void deliver(Message msg) override
+    void deliver_to_others(Message msg) override
     {
         logger->info("deliver: {} to {}", msg.to_string(), (long long int)this);
         write_msgs_.push_back(msg);
