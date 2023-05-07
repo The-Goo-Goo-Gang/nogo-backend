@@ -34,9 +34,9 @@
 #include <vector>
 
 #include "contest.hpp"
+#include "log.hpp"
 #include "message.hpp"
 #include "uimessage.hpp"
-#include "log.hpp"
 
 using asio::awaitable;
 using asio::co_spawn;
@@ -81,7 +81,7 @@ public:
     */
     void process_data(Message msg, Participant_ptr participant)
     {
-        logger->info("process_data: {} from {}:{}",msg.to_string(),participant->endpoint().address().to_string(),participant->endpoint().port());
+        logger->info("process_data: {} from {}:{}", msg.to_string(), participant->endpoint().address().to_string(), participant->endpoint().port());
         string_view data1 { msg.data1 }, data2 { msg.data2 };
 
         switch (msg.op) {
@@ -152,7 +152,6 @@ public:
             Role role { data2 };
             if (!Player::is_valid_name(name))
                 name = "Player" + std::to_string(contest.players.size() + 1);
-
             Player player { participant, name, role, PlayerType::REMOTE_HUMAN_PLAYER };
             contest.enroll(std::move(player));
             break;
@@ -230,7 +229,7 @@ public:
     }
     void join(Participant_ptr participant)
     {
-        logger->info("{}:{} join",participant->endpoint().address().to_string(),participant->endpoint().port());
+        logger->info("{}:{} join", participant->endpoint().address().to_string(), participant->endpoint().port());
         participants_.insert(participant);
         for (auto msg : recent_msgs_) {
             participant->deliver(msg);
@@ -239,7 +238,7 @@ public:
 
     void leave(Participant_ptr participant)
     {
-        logger->info("{}:{} leave",participant->endpoint().address().to_string(),participant->endpoint().port());
+        logger->info("{}:{} leave", participant->endpoint().address().to_string(), participant->endpoint().port());
         participants_.erase(participant);
     }
 
@@ -250,8 +249,8 @@ public:
             recent_msgs_.pop_front();
 
         for (auto p : participants_)
-            if (p != participant){
-                logger->info("broadcast {} from {}:{}",msg.to_string(),participant->endpoint().address().to_string(),participant->endpoint().port());
+            if (p != participant) {
+                logger->info("broadcast {} from {}:{}", msg.to_string(), participant->endpoint().address().to_string(), participant->endpoint().port());
                 p->deliver(msg);
             }
     }
@@ -317,7 +316,7 @@ private:
             for (std::string read_msg;;) {
                 std::size_t n = co_await asio::async_read_until(socket_, asio::dynamic_buffer(read_msg, 1024), "\n", use_awaitable);
                 string temp = read_msg.substr(0, n);
-                logger->info("Receive Message{}",temp);
+                logger->info("Receive Message{}", temp);
                 Message msg { read_msg.substr(0, n) };
                 room_.process_data(msg, shared_from_this());
 

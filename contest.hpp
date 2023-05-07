@@ -5,10 +5,11 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <ranges>
 #include <stdexcept>
+#include <utility>
 #include <vector>
-#include <chrono>
 
 #ifdef __GNUC__
 #include <range/v3/all.hpp>
@@ -22,9 +23,9 @@ namespace ranges = std::ranges;
 #include <asio/ip/tcp.hpp>
 using asio::ip::tcp;
 
+#include "log.hpp"
 #include "message.hpp"
 #include "rule.hpp"
-#include "log.hpp"
 
 class Participant {
 public:
@@ -96,7 +97,7 @@ public:
     auto at(Role role, Participant_ptr participant = nullptr) -> Player&
     {
         auto it = find(role, participant);
-        if (!it){
+        if (!it) {
             logger->critical("Playerlist: Player not found");
             throw std::logic_error("Player not found");
         }
@@ -118,7 +119,7 @@ public:
             throw std::logic_error("Player already in list");
         }
         if (contains(player.role)) {
-            logger->critical("Insert player: {} role already occupied",player.role.map("black","white","none"));
+            logger->critical("Insert player: {} role already occupied", player.role.map("black", "white", "none"));
             throw std::logic_error("Role already occupied");
         }
         if (player.role == Role::NONE) {
@@ -126,14 +127,14 @@ public:
                 player.role = Role::WHITE;
             else if (contains(Role::WHITE))
                 player.role = Role::BLACK;
-            else{
+            else {
                 logger->critical("PlayerList::insert: No role for player");
                 throw std::logic_error("No role for player");
             }
         }
         logger->info("Insert player: participant:{}:{}, name:{}, role:{}, type:{},",
-                    player.participant->endpoint().address().to_string(),player.participant->endpoint().port(), player.name, 
-                    player.role.map("black","white","none"), (int)player.type);
+            player.participant->endpoint().address().to_string(), player.participant->endpoint().port(), player.name,
+            player.role.map("black", "white", "none"), (int)player.type);
         players.push_back(std::move(player));
     }
     auto size() const
@@ -172,8 +173,8 @@ public:
     std::vector<Position> moves;
     PlayerList players;
 
-    Status status;
-    GameResult result;
+    Status status {};
+    GameResult result {};
     std::chrono::seconds duration;
 
     void clear()
@@ -187,8 +188,8 @@ public:
     }
     void reject()
     {
-        if (status != Status::NOT_PREPARED){
-            logger->critical("Reject: Contest stautus is {}", (int)status);
+        if (status != Status::NOT_PREPARED) {
+            logger->critical("Reject: Contest stautus is {}", std::to_underlying(status));
             throw std::logic_error("Contest already started");
         }
         players = {};
@@ -196,8 +197,8 @@ public:
 
     void enroll(Player&& player)
     {
-        if (status != Status::NOT_PREPARED){
-            logger->critical("Enroll Player: Contest stautus is {}", (int)status);
+        if (status != Status::NOT_PREPARED) {
+            logger->critical("Enroll Player: Contest stautus is {}", std::to_underlying(status));
             throw std::logic_error("Contest already started");
         }
         players.insert(std::move(player));
@@ -207,15 +208,15 @@ public:
 
     void play(Player player, Position pos)
     {
-        if (status != Status::ON_GOING){
-            logger->critical("Play: Contest stautus is {}", (int)status);
+        if (status != Status::ON_GOING) {
+            logger->critical("Play: Contest stautus is {}", std::to_underlying(status));
             throw std::logic_error("Contest not started");
         }
-        if (current.role != player.role){
+        if (current.role != player.role) {
             logger->critical("Play: In {}'s turn", current.role.map("black", "white", "none"));
             throw std::logic_error(player.name + " not allowed to play");
         }
-        if (current.board[pos]){
+        if (current.board[pos]) {
             logger->critical("Play: positon ({},{}) is occupied", pos.x, pos.y);
             throw StonePositionitionOccupiedException("Stone positionition occupied");
         }
@@ -235,11 +236,11 @@ public:
     void concede(Player player)
     {
         if (status != Status::ON_GOING) {
-            logger->critical("Concede: Contest status is {}",(int)status);
+            logger->critical("Concede: Contest status is {}", std::to_underlying(status));
             throw std::logic_error("Contest not started");
         }
         if (players.at(current.role) != player) {
-            logger->critical("Concede: In {}'s turn",current.role.map("black","white","none"));
+            logger->critical("Concede: In {}'s turn", current.role.map("black", "white", "none"));
             throw std::logic_error(player.name + " not allowed to concede");
         }
         status = Status::GAME_OVER;
@@ -248,12 +249,12 @@ public:
 
     void timeout(Player player)
     {
-        if (status != Status::ON_GOING){
-            logger->critical("Overtime: Contest status is {}",(int)status);
+        if (status != Status::ON_GOING) {
+            logger->critical("Overtime: Contest status is {}", std::to_underlying(status));
             throw std::logic_error("Contest not started");
         }
         if (players.at(current.role) != player) {
-            logger->critical("Overtime: In {}'s turn", current.role.map("black","white","none"));
+            logger->critical("Overtime: In {}'s turn", current.role.map("black", "white", "none"));
             throw std::logic_error("not in " + player.name + "'s turn");
         }
         status = Status::GAME_OVER;
