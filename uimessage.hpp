@@ -62,8 +62,8 @@ _EXPORT struct UiMessage : public Message {
         GameMetadata() = default;
         GameMetadata(const Contest& contest)
             : size(rank_n)
-            , player_opposing(PlayerData(contest.players.at(Role::WHITE)))
-            , player_our(PlayerData(contest.players.at(Role::BLACK)))
+            , player_opposing(PlayerData(contest.players.at(-contest.local_role)))
+            , player_our(PlayerData(contest.players.at(contest.local_role)))
             , turn_timeout(contest.duration.count())
         {
         }
