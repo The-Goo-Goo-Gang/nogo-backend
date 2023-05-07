@@ -5,10 +5,10 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <ranges>
 #include <stdexcept>
 #include <vector>
-#include <chrono>
 
 #ifdef __GNUC__
 #include <range/v3/all.hpp>
@@ -160,8 +160,8 @@ public:
     std::vector<Position> moves;
     PlayerList players;
 
-    Status status;
-    GameResult result;
+    Status status {};
+    GameResult result {};
     std::chrono::seconds duration;
 
     void clear()
