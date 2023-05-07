@@ -64,7 +64,7 @@ _EXPORT struct UiMessage : public Message {
             : size(rank_n)
             , player_opposing(PlayerData(contest.players.at(Role::WHITE)))
             , player_our(PlayerData(contest.players.at(Role::BLACK)))
-            , turn_timeout(contest.timeout_ms.count() / 1000)
+            , turn_timeout(contest.duration.count())
         {
         }
         NLOHMANN_DEFINE_TYPE_INTRUSIVE(GameMetadata, size, player_opposing, player_our, turn_timeout)

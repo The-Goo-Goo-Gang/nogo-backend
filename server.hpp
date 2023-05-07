@@ -46,9 +46,10 @@ using asio::ip::tcp;
 
 using namespace std::chrono_literals;
 using std::chrono::milliseconds;
+using std::chrono::seconds;
 using std::chrono::system_clock;
 
-constexpr auto TIMEOUT { 30000ms };
+constexpr auto TIMEOUT { 30s };
 
 class Room;
 
@@ -103,18 +104,17 @@ public:
             if (contest.status != Contest::Status::NOT_PREPARED) {
                 contest.clear();
             }
-            int timeout = std::stoi(msg.data1);
+            // int timeout = std::stoi(msg.data1);
             // int rank_n = std::stoi(msg.data2);
 
-            milliseconds ms { timeout };
-            contest.timeout_ms = ms;
+            seconds duration { std::stoi(msg.data1) };
+            contest.duration = duration;
 
             Player player1 { participant, "BLACK", Role::BLACK, PlayerType::LOCAL_HUMAN_PLAYER },
                 player2 { participant, "WHITE", Role::WHITE, PlayerType::LOCAL_HUMAN_PLAYER };
             contest.enroll(std::move(player1)), contest.enroll(std::move(player2));
 
             deliver_ui_state();
-
             break;
         }
         case OpCode::LOCAL_GAME_TIMEOUT_OP: {
@@ -125,15 +125,14 @@ public:
             timer_.cancel();
 
             Position pos { data1 };
-            auto role { data2 == "b" ? Role::BLACK : data2 == "w" ? Role::WHITE
-                                                                  : Role::NONE };
+            Role role { data2 };
 
             auto player { contest.players.at(role, participant) };
             auto opponent { contest.players.at(-player.role) };
 
             contest.play(player, pos);
 
-            timer_.expires_after(contest.timeout_ms);
+            timer_.expires_after(contest.duration);
             timer_.async_wait([this, opponent](const asio::error_code& ec) {
                 if (!ec) {
                     contest.timeout(opponent);
@@ -166,22 +165,17 @@ public:
 
             Position pos { data1 };
 
+            // TODO: adjust time
             milliseconds ms { std::stoull(msg.data2) };
-
-            // TODO: adjust time
-
-            // TODO: adjust time
 
             auto player { contest.players.at(Role::NONE, participant) };
             auto opponent { contest.players.at(-player.role) };
 
             contest.play(player, pos);
 
-            deliver_ui_state();
-
-            contest.timeout_ms = TIMEOUT;
+            contest.duration = TIMEOUT;
             timer_cancelled_ = false;
-            timer_.expires_after(contest.timeout_ms);
+            timer_.expires_after(contest.duration);
             timer_.async_wait([this, opponent](const asio::error_code& ec) {
                 if (!ec && !timer_cancelled_) {
                     contest.timeout(opponent);

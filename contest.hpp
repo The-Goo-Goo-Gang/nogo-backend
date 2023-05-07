@@ -8,6 +8,7 @@
 #include <ranges>
 #include <stdexcept>
 #include <vector>
+#include <chrono>
 
 #ifdef __GNUC__
 #include <range/v3/all.hpp>
@@ -161,7 +162,7 @@ public:
 
     Status status;
     GameResult result;
-    std::chrono::milliseconds timeout_ms;
+    std::chrono::seconds duration;
 
     void clear()
     {
