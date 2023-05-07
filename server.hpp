@@ -159,6 +159,10 @@ public:
         case OpCode::READY_OP: {
             std::cout << "ready: is_local = " << participant->is_local << ", data1 = " << data1 << ", data2 = " << data2 << std::endl;
 
+            if (contest.status == Contest::Status::GAME_OVER && participant->is_local) {
+                contest.clear();
+            }
+
             auto name { data1 };
             Role role { data2 };
             if (!Player::is_valid_name(name))
