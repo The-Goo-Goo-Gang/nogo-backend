@@ -175,9 +175,7 @@ public:
 
             contest.play(player, pos);
 
-            if (participant->is_local) {
-                participant->deliver(UiMessage(contest));
-            }
+            deliver_ui_state();
 
             contest.timeout_ms = TIMEOUT;
             timer_cancelled_ = false;
