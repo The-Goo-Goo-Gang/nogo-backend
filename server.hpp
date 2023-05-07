@@ -170,6 +170,8 @@ public:
 
             // TODO: adjust time
 
+            // TODO: adjust time
+
             auto player { contest.players.at(Role::NONE, participant) };
             auto opponent { contest.players.at(-player.role) };
 
