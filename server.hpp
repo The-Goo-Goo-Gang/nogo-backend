@@ -251,7 +251,7 @@ public:
     }
 
 private:
-    bool timer_cancelled_ { false };
+    bool timer_cancelled_ {};
     asio::steady_timer timer_;
     asio::io_context& io_context_;
 
