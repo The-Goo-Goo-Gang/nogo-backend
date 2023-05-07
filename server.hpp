@@ -184,12 +184,10 @@ public:
                 }
             });
 
+            deliver(msg, participant); // broadcast
             if (contest.result.winner == opponent.role) {
+                opponent.participant->deliver({ OpCode::WIN_PENDING_OP });
                 participant->deliver({ OpCode::SUICIDE_END_OP });
-                deliver(msg, participant); // broadcast
-            } else if (contest.result.winner == player.role) {
-                participant->deliver({ OpCode::GIVEUP_OP });
-                opponent.participant->deliver({ OpCode::GIVEUP_END_OP }); // radical
             }
 
             deliver_ui_state();
@@ -213,7 +211,11 @@ public:
             break;
 
         case OpCode::LEAVE_OP: {
-            participant->stop();
+            if (participant->is_local) {
+                close_except(participant);
+            } else {
+                participant->stop();
+            }
             break;
         }
         case OpCode::CHAT_OP: {
@@ -240,6 +242,13 @@ public:
     {
         logger->info("{}:{} leave", participant->endpoint().address().to_string(), participant->endpoint().port());
         participants_.erase(participant);
+    }
+
+    void close_except(Participant_ptr participant)
+    {
+        for (auto p : participants_)
+            if (p != participant)
+                p->stop();
     }
 
     void deliver(Message msg, Participant_ptr participant)

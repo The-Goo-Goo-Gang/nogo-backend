@@ -1,7 +1,7 @@
 #pragma once
 #ifndef _EXPORT
 #define _EXPORT
-#endif 
+#endif
 
 #include <nlohmann/json.hpp>
 #include <string_view>
@@ -28,6 +28,7 @@ _EXPORT enum class OpCode : int {
     LOCAL_GAME_MOVE_OP,
     CONNECT_TO_REMOTE_OP,
     CONNECT_RESULT_OP,
+    WIN_PENDING_OP,
 };
 
 _EXPORT enum class PlayerType {
