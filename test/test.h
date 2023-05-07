@@ -56,7 +56,7 @@ public:
     }
     void do_write()
     {
-        asio::async_write(socket_, asio::buffer(write_msgs_.front()), [this](std::error_code ec, std::size_t /*length*/) {
+        asio::async_write(socket_, asio::buffer(write_msgs_.front() + "\n"), [this](std::error_code ec, std::size_t /*length*/) {
             if (!ec) {
                 write_msgs_.pop_front();
                 if (!write_msgs_.empty())
