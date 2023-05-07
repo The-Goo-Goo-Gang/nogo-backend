@@ -1,5 +1,7 @@
 #pragma once
-#define export
+#ifndef _EXPORT
+#define _EXPORT
+#endif
 
 #include <algorithm>
 #include <cctype>
@@ -38,11 +40,16 @@ public:
     virtual void deliver(Message msg) = 0;
     virtual void stop() = 0;
     virtual bool operator==(const Participant&) const = 0;
+
+    auto to_string() const
+    {
+        return endpoint().address().to_string();
+    }
 };
 
-export using Participant_ptr = std::shared_ptr<Participant>;
+_EXPORT using Participant_ptr = std::shared_ptr<Participant>;
 
-export struct Player {
+_EXPORT struct Player {
     Participant_ptr participant;
     std::string name;
     Role role;
@@ -134,7 +141,7 @@ public:
     }
 };
 
-export class Contest {
+_EXPORT class Contest {
 public:
     enum class Status {
         NOT_PREPARED,
@@ -185,7 +192,7 @@ public:
         players = {};
     }
 
-    void enroll(Player player)
+    void enroll(Player&& player)
     {
         if (status != Status::NOT_PREPARED){
             logger->critical("Enroll Player: Contest stautus is {}", (int)status);

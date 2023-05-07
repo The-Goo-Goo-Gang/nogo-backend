@@ -1,5 +1,7 @@
 #pragma once
-#define export
+#ifndef _EXPORT
+#define _EXPORT
+#endif
 
 #include <algorithm>
 #include <array>
@@ -13,9 +15,9 @@
 namespace ranges = std::ranges;
 #endif
 
-export constexpr inline auto rank_n = 9;
+_EXPORT constexpr inline auto rank_n = 9;
 
-export struct Position {
+_EXPORT struct Position {
     int x { -1 }, y { -1 };
     constexpr Position(int x, int y)
         : x(x)
@@ -29,13 +31,17 @@ export struct Position {
     }
     constexpr explicit operator bool() const { return x >= 0 && y >= 0; }
     // constexpr auto operator<=>(const Position& p) const = default;
-    auto to_string() const
+    auto to_string() const -> std::string
     {
-        return std::string { char('A' + x), char('1' + y) };
+        return std::string(1, 'A' + x) + std::to_string(y);
+    }
+    constexpr explicit Position(auto str)
+        : Position(str[0] - 'A', stoi(std::string { str.substr(1) }))
+    {
     }
 };
 
-export struct Role {
+_EXPORT struct Role {
     int id;
     static const Role BLACK, WHITE, NONE;
 
@@ -43,7 +49,7 @@ export struct Role {
         : Role(0)
     {
     }
-
+ 
     constexpr decltype(auto) map(auto&& v_black, auto&& v_white, auto&& v_none) const
     {
         return id == 1 ? v_black
@@ -54,6 +60,18 @@ export struct Role {
     constexpr auto operator-() const { return Role(-id); }
     constexpr explicit operator bool() { return id; }
 
+    auto to_string() const -> std::string
+    {
+        return map("BLACK", "WHITE", "NONE");
+    }
+
+    explicit constexpr Role(auto str)
+        : Role(str == "b"    ? 1
+                : str == "w" ? -1
+                             : 0)
+    {
+    }
+
 private:
     constexpr explicit Role(int id)
         : id(id)
@@ -62,7 +80,7 @@ private:
 };
 constexpr Role Role::BLACK { 1 }, Role::WHITE { -1 }, Role::NONE { 0 };
 
-export class Board {
+_EXPORT class Board {
     std::array<Role, rank_n * rank_n> arr;
 
     static constexpr std::array delta { Position { -1, 0 }, Position { 1, 0 }, Position { 0, -1 }, Position { 0, 1 } };
@@ -142,7 +160,7 @@ public:
     }
 };
 
-export struct State {
+_EXPORT struct State {
     Board board;
     Role role;
     Position last_move;
