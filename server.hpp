@@ -92,8 +92,8 @@ public:
             asio::error_code ec;
             start_session(io_context_, *this, ec, data1, data2);
             if (ec) {
-                logger->error("start_session failed: {}", (string)ec.message());
-            } else {=
+                logger->error("start_session failed: {}", ec.message());
+            } else {
                 logger->info("start_session success: {}:{}", data1, data2);
             }
             break;
