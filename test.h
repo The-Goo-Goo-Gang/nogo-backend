@@ -1,5 +1,4 @@
 #include "asio.hpp"
-#include "windows.h"
 #include <cstdlib>
 #include <deque>
 #include <iostream>
