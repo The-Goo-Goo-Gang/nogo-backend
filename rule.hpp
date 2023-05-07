@@ -49,7 +49,7 @@ _EXPORT struct Role {
         : Role(0)
     {
     }
- 
+
     constexpr decltype(auto) map(auto&& v_black, auto&& v_white, auto&& v_none) const
     {
         return id == 1 ? v_black

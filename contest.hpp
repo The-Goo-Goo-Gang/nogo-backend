@@ -8,6 +8,7 @@
 #include <ranges>
 #include <stdexcept>
 #include <vector>
+#include <chrono>
 
 #ifdef __GNUC__
 #include <range/v3/all.hpp>
@@ -27,7 +28,7 @@ using asio::ip::tcp;
 
 class Participant {
 public:
-    bool is_local { false };
+    bool is_local {};
     Participant() = default;
     Participant(bool is_local)
         : is_local(is_local)
@@ -165,7 +166,7 @@ public:
         using runtime_error::runtime_error;
     };
 
-    bool should_giveup { false };
+    bool should_giveup {};
 
     State current {};
     std::vector<Position> moves;
@@ -173,6 +174,7 @@ public:
 
     Status status;
     GameResult result;
+    std::chrono::seconds duration;
 
     void clear()
     {
