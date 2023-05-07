@@ -38,9 +38,12 @@ public:
     virtual ~Participant()
     {
     }
+    virtual std::string_view get_name() const = 0;
+    virtual void set_name(std::string_view name) = 0;
     virtual tcp::endpoint endpoint() const = 0;
     virtual void deliver(Message msg) = 0;
     virtual void stop() = 0;
+    virtual void shutdown() {}
     virtual bool operator==(const Participant&) const = 0;
 
     auto to_string() const
@@ -176,6 +179,7 @@ public:
     Status status {};
     GameResult result {};
     std::chrono::seconds duration;
+    Role local_role { Role::NONE };
 
     void clear()
     {

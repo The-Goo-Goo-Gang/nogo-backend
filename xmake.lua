@@ -12,7 +12,7 @@ target("nogo")
     add_packages("asio", "nlohmann_json","spdlog")
     add_packages("range-v3")
     add_files("nogo.cpp")
-    if is_plat("windows") then
+    if is_plat("windows") or is_plat("mingw") then
         add_files("res.rc")
     end
     set_basename("nogo-server")

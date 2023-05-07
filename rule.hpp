@@ -51,10 +51,10 @@ _EXPORT struct Position {
     // constexpr auto operator<=>(const Position& p) const = default;
     auto to_string() const -> std::string
     {
-        return std::string(1, 'A' + x) + std::to_string(y);
+        return std::string(1, 'A' + x) + std::to_string(y + 1);
     }
     constexpr explicit Position(std::string_view str)
-        : Position(str[0] - 'A', stoi(str.substr(1)))
+        : Position(str[0] - 'A', stoi(str.substr(1)) - 1)
     {
     }
 };

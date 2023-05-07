@@ -62,8 +62,8 @@ _EXPORT struct UiMessage : public Message {
         GameMetadata() = default;
         GameMetadata(const Contest& contest)
             : size(rank_n)
-            , player_opposing(PlayerData(contest.players.at(Role::WHITE)))
-            , player_our(PlayerData(contest.players.at(Role::BLACK)))
+            , player_opposing(PlayerData(contest.players.at(-contest.local_role)))
+            , player_our(PlayerData(contest.players.at(contest.local_role)))
             , turn_timeout(contest.duration.count())
         {
         }
@@ -83,11 +83,13 @@ _EXPORT struct UiMessage : public Message {
     struct Game {
         std::array<std::array<int, rank_n>, rank_n> chessboard;
         int now_playing;
+        int move_count;
         GameMetadata metadata;
         std::vector<DynamicStatistics> statistics;
         Game() = default;
         Game(const Contest& contest)
             : now_playing(contest.current.role.id)
+            , move_count(contest.moves.size())
             , metadata(GameMetadata(contest))
         {
             const auto board = contest.current.board.to_2darray();
@@ -95,7 +97,7 @@ _EXPORT struct UiMessage : public Message {
                 for (int j = 0; j < rank_n; ++j)
                     chessboard[i][j] = board[i][j].id;
         }
-        NLOHMANN_DEFINE_TYPE_INTRUSIVE(Game, chessboard, now_playing, metadata, statistics)
+        NLOHMANN_DEFINE_TYPE_INTRUSIVE(Game, chessboard, now_playing, move_count, metadata, statistics)
     };
     struct UiState {
         bool is_gaming;
