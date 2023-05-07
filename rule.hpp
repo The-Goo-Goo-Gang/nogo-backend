@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <array>
+#include <charconv>
 #include <iostream>
 #include <ranges>
 #include <vector>
@@ -14,6 +15,23 @@
 #else
 namespace ranges = std::ranges;
 #endif
+
+template <typename T>
+constexpr auto stoi_base(std::string_view str)
+{
+    T result;
+    auto [p, ec] = std::from_chars(str.data(), str.data() + str.size(), result);
+    switch (ec) {
+    case std::errc::invalid_argument:
+        throw std::invalid_argument { "no conversion" };
+    case std::errc::result_out_of_range:
+        throw std::out_of_range { "out of range" };
+    default:
+        return result;
+    };
+}
+constexpr auto stoi = stoi_base<int>;
+constexpr auto stoull = stoi_base<unsigned long long>;
 
 _EXPORT constexpr inline auto rank_n = 9;
 
@@ -35,8 +53,8 @@ _EXPORT struct Position {
     {
         return std::string(1, 'A' + x) + std::to_string(y);
     }
-    constexpr explicit Position(auto str)
-        : Position(str[0] - 'A', stoi(std::string { str.substr(1) }))
+    constexpr explicit Position(std::string_view str)
+        : Position(str[0] - 'A', stoi(str.substr(1)))
     {
     }
 };
@@ -65,12 +83,14 @@ _EXPORT struct Role {
         return map("BLACK", "WHITE", "NONE");
     }
 
-    explicit constexpr Role(auto str)
+    explicit constexpr Role(std::string_view str)
         : Role(str == "b"    ? 1
                 : str == "w" ? -1
                              : 0)
     {
     }
+
+    explicit constexpr operator int() const { return id; }
 
 private:
     constexpr explicit Role(int id)

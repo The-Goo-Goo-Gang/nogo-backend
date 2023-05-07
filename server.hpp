@@ -53,7 +53,7 @@ constexpr auto TIMEOUT { 30s };
 
 class Room;
 
-void start_session(asio::io_context&, Room&, asio::error_code&, const string&, const string&);
+void start_session(asio::io_context&, Room&, asio::error_code&, std::string_view, std::string_view);
 
 class Room {
     Contest contest;
@@ -80,7 +80,7 @@ public:
     */
     void process_data(Message msg, Participant_ptr participant)
     {
-        string_view data1 { msg.data1 }, data2 { msg.data2 };
+        const string_view data1 { msg.data1 }, data2 { msg.data2 };
 
         switch (msg.op) {
         case OpCode::UPDATE_UI_STATE_OP: {
@@ -88,11 +88,11 @@ public:
         }
         case OpCode::CONNECT_TO_REMOTE_OP: {
             asio::error_code ec;
-            start_session(io_context_, *this, ec, msg.data1, msg.data2);
+            start_session(io_context_, *this, ec, data1, data2);
             if (ec) {
                 std::cerr << "start_session failed: " << ec.message() << std::endl;
             } else {
-                std::cout << "start_session success: " << msg.data1 << ":" << msg.data2 << std::endl;
+                std::cout << "start_session success: " << data1 << ":" << data2 << std::endl;
             }
             break;
         }
@@ -164,9 +164,9 @@ public:
             timer_.cancel();
 
             Position pos { data1 };
+            milliseconds ms { stoull(data2) };
 
             // TODO: adjust time
-            milliseconds ms { std::stoull(msg.data2) };
 
             auto player { contest.players.at(Role::NONE, participant) };
             auto opponent { contest.players.at(-player.role) };
@@ -347,10 +347,10 @@ private:
     std::deque<Message> write_msgs_;
 };
 
-void start_session(asio::io_context& io_context, Room& room, asio::error_code& ec, const string& ip_address, const string& port)
+void start_session(asio::io_context& io_context, Room& room, asio::error_code& ec, std::string_view ip_address, std::string_view port)
 {
     tcp::socket socket { io_context };
-    socket.connect(tcp::endpoint(asio::ip::make_address(ip_address), std::stoi(port)), ec);
+    socket.connect(tcp::endpoint(asio::ip::make_address(ip_address), stoi(port)), ec);
     if (!ec)
         std::make_shared<Session>(std::move(socket), room, false)->start();
 }
