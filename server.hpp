@@ -46,17 +46,27 @@ using asio::ip::tcp;
 
 using namespace std::chrono_literals;
 using std::chrono::milliseconds;
+using std::chrono::seconds;
 using std::chrono::system_clock;
 
-constexpr auto TIMEOUT { 3000ms };
+constexpr auto TIMEOUT { 30s };
 
 class Room;
 
-void start_session(asio::io_context&, Room&, asio::error_code&, const string& ip_address, const string& port);
+void start_session(asio::io_context&, Room&, asio::error_code&, const string&, const string&);
 
 class Room {
     Contest contest;
     std::deque<std::string> chats;
+
+    void deliver_ui_state()
+    {
+        Message msg { UiMessage { contest } };
+        for (auto participant : participants_) {
+            if (participant->is_local)
+                participant->deliver(msg);
+        }
+    }
 
 public:
     Room(asio::io_context& io_context)
@@ -86,31 +96,52 @@ public:
             }
             break;
         }
+        case OpCode::CONNECT_RESULT_OP: {
+            break;
+        }
         case OpCode::START_LOCAL_GAME_OP: {
-            // TODO
-            if (contest.status == Contest::Status::GAME_OVER) {
+            std::cout << "start local game: timeout = " << data1 << ", size = " << data2 << std::endl;
+            if (contest.status != Contest::Status::NOT_PREPARED) {
                 contest.clear();
             }
+            // int timeout = std::stoi(msg.data1);
+            // int rank_n = std::stoi(msg.data2);
+
+            seconds duration { std::stoi(msg.data1) };
+            contest.duration = duration;
+
             Player player1 { participant, "BLACK", Role::BLACK, PlayerType::LOCAL_HUMAN_PLAYER },
                 player2 { participant, "WHITE", Role::WHITE, PlayerType::LOCAL_HUMAN_PLAYER };
             contest.enroll(std::move(player1)), contest.enroll(std::move(player2));
 
-            if (participant->is_local) {
-                participant->deliver(UiMessage(contest));
-            }
-
+            deliver_ui_state();
             break;
         }
         case OpCode::LOCAL_GAME_TIMEOUT_OP: {
-            Role role { data1 };
+            // Deprecated
+            break;
+        }
+        case OpCode::LOCAL_GAME_MOVE_OP: {
+            timer_.cancel();
+
+            Position pos { data1 };
+            Role role { data2 };
+
             auto player { contest.players.at(role, participant) };
+            auto opponent { contest.players.at(-player.role) };
 
-            contest.timeout(player);
+            contest.play(player, pos);
 
-            if (participant->is_local) {
-                participant->deliver(UiMessage(contest));
-            }
+            timer_.expires_after(contest.duration);
+            timer_.async_wait([this, opponent](const asio::error_code& ec) {
+                if (!ec) {
+                    contest.timeout(opponent);
+                    opponent.participant->deliver({ OpCode::TIMEOUT_END_OP });
+                    deliver_ui_state();
+                }
+            });
 
+            deliver_ui_state();
             break;
         }
 
@@ -133,21 +164,18 @@ public:
             timer_.cancel();
 
             Position pos { data1 };
-            milliseconds ms { std::stoull(std::string { data2 }) };
 
             // TODO: adjust time
+            milliseconds ms { std::stoull(msg.data2) };
 
             auto player { contest.players.at(Role::NONE, participant) };
             auto opponent { contest.players.at(-player.role) };
 
             contest.play(player, pos);
 
-            if (participant->is_local) {
-                participant->deliver(UiMessage(contest));
-            }
-
+            contest.duration = TIMEOUT;
             timer_cancelled_ = false;
-            timer_.expires_after(TIMEOUT);
+            timer_.expires_after(contest.duration);
             timer_.async_wait([this, opponent](const asio::error_code& ec) {
                 if (!ec && !timer_cancelled_) {
                     contest.timeout(opponent);
@@ -162,6 +190,8 @@ public:
                 participant->deliver({ OpCode::GIVEUP_OP });
                 opponent.participant->deliver({ OpCode::GIVEUP_END_OP }); // radical
             }
+
+            deliver_ui_state();
             break;
         }
         case OpCode::GIVEUP_OP: {
@@ -170,9 +200,7 @@ public:
 
             contest.concede(player);
 
-            if (participant->is_local) {
-                participant->deliver(UiMessage(contest));
-            }
+            deliver_ui_state();
             break;
         }
         case OpCode::TIMEOUT_END_OP:
