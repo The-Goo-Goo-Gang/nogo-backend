@@ -180,13 +180,14 @@ public:
             timer_.async_wait([this, opponent](const asio::error_code& ec) {
                 if (!ec && !timer_cancelled_) {
                     contest.timeout(opponent);
-                    opponent.participant->deliver({ OpCode::TIMEOUT_END_OP });
+                    opponent.participant->deliver({ OpCode::WIN_PENDING_OP, Contest::WinType::TIMEOUT });
+                    participant->deliver({ OpCode::TIMEOUT_END_OP });
                 }
             });
 
             deliver(msg, participant); // broadcast
             if (contest.result.winner == opponent.role) {
-                opponent.participant->deliver({ OpCode::WIN_PENDING_OP });
+                opponent.participant->deliver({ OpCode::WIN_PENDING_OP, Contest::WinType::SUICIDE });
                 participant->deliver({ OpCode::SUICIDE_END_OP });
             }
 
@@ -198,17 +199,19 @@ public:
             auto player { contest.players.at(role, participant) };
 
             contest.concede(player);
+            opponent.participant->deliver({ OpCode::WIN_PENDING_OP, Contest::WinType::GIVEUP });
+            participant->deliver({ OpCode::GIVEUP_END_OP });
 
             deliver_ui_state();
             break;
         }
+        // confirmation from the loser
         case OpCode::TIMEOUT_END_OP:
         case OpCode::SUICIDE_END_OP:
-        case OpCode::GIVEUP_END_OP:
-            // should not receive this code
-            // game over signal should send by me
-            // the evil client must be wrong
+        case OpCode::GIVEUP_END_OP: {
+            deliver(msg, participant); // broadcast
             break;
+        }
 
         case OpCode::LEAVE_OP: {
             if (participant->is_local) {
