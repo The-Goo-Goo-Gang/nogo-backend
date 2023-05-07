@@ -131,7 +131,7 @@ public:
         case OpCode::MOVE_OP: {
             timer_cancelled_ = true;
             timer_.cancel();
-            
+
             Position pos { data1 };
             milliseconds ms { std::stoull(std::string { data2 }) };
 
@@ -223,7 +223,7 @@ public:
     }
 
 private:
-    bool timer_cancelled_ { false };
+    bool timer_cancelled_ {};
     asio::steady_timer timer_;
     asio::io_context& io_context_;
 
