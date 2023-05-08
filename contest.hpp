@@ -43,7 +43,7 @@ public:
     virtual tcp::endpoint endpoint() const = 0;
     virtual void deliver(Message msg) = 0;
     virtual void stop() = 0;
-    virtual void shutdown() {}
+    virtual void shutdown() { }
     virtual bool operator==(const Participant&) const = 0;
 
     auto to_string() const
@@ -118,23 +118,26 @@ public:
     auto insert(Player&& player)
     {
         if (std::ranges::find(players, player) != players.end()) {
-            logger->critical("Insert player: Couple already full");
+            logger->critical("Player already in list");
             throw std::logic_error("Player already in list");
         }
-        if (contains(player.role)) {
-            logger->critical("Insert player: {} role already occupied", player.role.map("black", "white", "none"));
-            throw std::logic_error("Role already occupied");
-        }
         if (player.role == Role::NONE) {
-            if (contains(Role::BLACK))
+            if (contains(Role::BLACK)) {
+                logger->info("role black occupied, so guess role: white");
                 player.role = Role::WHITE;
-            else if (contains(Role::WHITE))
+            } else if (contains(Role::WHITE)) {
+                logger->info("role white occupied, so guess role: black");
                 player.role = Role::BLACK;
-            else {
+            } else {
                 logger->critical("PlayerList::insert: No role for player");
                 throw std::logic_error("No role for player");
             }
         }
+        if (contains(player.role)) {
+            logger->critical("Insert player: {} role already occupied", player.role.to_string());
+            throw std::logic_error("Role already occupied");
+        }
+
         logger->info("Insert player: participant:{}:{}, name:{}, role:{}, type:{},",
             player.participant->endpoint().address().to_string(), player.participant->endpoint().port(), player.name,
             player.role.map("black", "white", "none"), (int)player.type);
