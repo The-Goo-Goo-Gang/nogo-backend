@@ -27,11 +27,11 @@
 #include <asio/write.hpp>
 
 #include <algorithm>
-#include <stdexcept>
 #include <chrono>
 #include <deque>
 #include <iostream>
 #include <set>
+#include <stdexcept>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -74,6 +74,27 @@ class Room {
     void deliver_ui_state()
     {
         deliver_to_local(UiMessage { contest });
+    }
+
+    auto receive_participant_name(Participant_ptr participant, std::string_view name)
+    {
+
+        auto new_name { name };
+
+        if (!Player::is_valid_name(new_name)) {
+            if (participant->get_name().empty())
+                new_name = "Player" + std::to_string(contest.players.size() + 1);
+            else
+                new_name = participant->get_name();
+        }
+
+        if (new_name != participant->get_name()) {
+            if (!participant->is_local && !participant->get_name().empty() && new_name != participant->get_name())
+                deliver_to_local({ OpCode::CHAT_USERNAME_UPDATE_OP, participant->get_name(), new_name });
+            participant->set_name(new_name);
+        }
+
+        return new_name;
     }
 
 public:
@@ -170,15 +191,8 @@ public:
                 contest.clear();
             }
 
-            auto name { data1 };
+            auto name { receive_participant_name(participant, data1) };
             Role role { data2 };
-            if (!Player::is_valid_name(name))
-                name = "Player" + std::to_string(contest.players.size() + 1);
-
-            if (!participant->is_local) {
-                deliver_to_local({ OpCode::CHAT_USERNAME_UPDATE_OP, participant->endpoint().address().to_string(), name });
-            }
-            participant->set_name(name);
 
             if (participant->is_local) {
                 Player player { participant, name, role, PlayerType::LOCAL_HUMAN_PLAYER };
@@ -197,6 +211,8 @@ public:
         }
         case OpCode::REJECT_OP: {
             contest.reject();
+
+            receive_participant_name(participant, data1);
 
             if (participant->is_local) {
                 // TODO: support multiple remote waiting players
@@ -488,7 +504,8 @@ private:
             }
         } catch (std::exception& e) {
             logger->error("Exception: {}", e.what());
-            if (!is_local) stop();
+            if (!is_local)
+                stop();
         }
     }
 
@@ -510,7 +527,8 @@ private:
             }
         } catch (std::exception& e) {
             logger->error("Exception: {}", e.what());
-            if (!is_local) stop();
+            if (!is_local)
+                stop();
         }
     }
 
