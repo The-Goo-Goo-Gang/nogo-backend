@@ -92,6 +92,7 @@ _EXPORT struct UiMessage : public Message {
         std::array<std::array<int, rank_n>, rank_n> chessboard;
         int now_playing;
         int move_count;
+        std::optional<Position> last_move;
         std::vector<Position> disabled_positions;
         GameMetadata metadata;
         std::vector<DynamicStatistics> statistics;
@@ -100,6 +101,7 @@ _EXPORT struct UiMessage : public Message {
             : now_playing(contest.current.role.id)
             , move_count(contest.moves.size())
             , metadata(GameMetadata(contest))
+            , last_move(contest.moves.empty() ? std::nullopt : std::optional<Position>(contest.moves.back()))
         {
             auto actions = contest.current.available_actions();
             auto index = Board::index();
@@ -112,7 +114,7 @@ _EXPORT struct UiMessage : public Message {
                     chessboard[i][j] = board[i][j].id;
         }
 
-        NLOHMANN_DEFINE_TYPE_INTRUSIVE(Game, chessboard, now_playing, move_count, metadata, statistics, disabled_positions)
+        NLOHMANN_DEFINE_TYPE_INTRUSIVE(Game, chessboard, now_playing, move_count, metadata, statistics, disabled_positions, last_move)
     };
     struct UiState {
         bool is_gaming;
