@@ -297,10 +297,10 @@ public:
                 logger->debug("receive LEAVE_OP: is local, do close_except");
                 close_except(participant);
             } else {
+                logger->debug("receive LEAVE_OP: deliver_to_local");
+                deliver_to_local({ OpCode::LEAVE_OP, participant->get_name() });
                 logger->debug("receive LEAVE_OP: not local, shutdown participant");
                 participant->shutdown();
-                logger->debug("receive LEAVE_OP: deliver_to_local");
-                deliver_to_local(msg);
             }
             logger->debug("receive LEAVE_OP: process end");
 
