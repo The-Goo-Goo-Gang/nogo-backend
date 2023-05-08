@@ -26,6 +26,8 @@
 #include <asio/use_awaitable.hpp>
 #include <asio/write.hpp>
 
+#include <algorithm>
+#include <stdexcept>
 #include <chrono>
 #include <deque>
 #include <iostream>
@@ -173,6 +175,9 @@ public:
             if (!Player::is_valid_name(name))
                 name = "Player" + std::to_string(contest.players.size() + 1);
 
+            if (!participant->is_local) {
+                deliver_to_local({ OpCode::CHAT_USERNAME_UPDATE_OP, participant->endpoint().address().to_string(), name });
+            }
             participant->set_name(name);
 
             if (participant->is_local) {
@@ -243,7 +248,7 @@ public:
             break;
         }
         case OpCode::GIVEUP_OP: {
-            Role role { data2 };
+            Role role { data1 };
             auto player { contest.players.at(role, participant) };
             auto opponent { contest.players.at(-player.role) };
 
@@ -289,8 +294,44 @@ public:
             while (recent_msgs_.size() > max_recent_msgs)
                 recent_msgs_.pop_front();
 
-            for (auto participant : participants_)
-                participant->deliver(msg);
+            if (participant->is_local) {
+                throw std::logic_error("CHAT_OP should not be sent by local");
+            } else {
+                auto name = participant->get_name();
+                if (name.empty()) {
+                    name = participant->endpoint().address().to_string();
+                }
+                deliver_to_local({ OpCode::CHAT_RECEIVE_MESSAGE_OP, data1, name });
+            }
+            break;
+        }
+        case OpCode::CHAT_SEND_MESSAGE_OP: {
+            if (participant->is_local) {
+                auto success = false;
+                for (auto participant : participants_) {
+                    if (!participant->get_name().empty() && participant->get_name() == data2) {
+                        participant->deliver({ OpCode::CHAT_OP, data1 });
+                        success = true;
+                    } else if (participant->get_name().empty() && participant->endpoint().address().to_string() == data2) {
+                        participant->deliver({ OpCode::CHAT_OP, data1 });
+                        success = true;
+                    }
+                }
+            } else {
+                throw std::logic_error("CHAT_SEND_MESSAGE_OP should not be sent by remote");
+            }
+            break;
+        }
+        case OpCode::CHAT_SEND_BROADCAST_MESSAGE_OP: {
+            if (participant->is_local) {
+                deliver_to_others({ OpCode::CHAT_OP, data1 }, participant);
+            } else {
+                throw std::logic_error("CHAT_SEND_BROADCAST_MESSAGE_OP should not be sent by remote");
+            }
+            break;
+        }
+        case OpCode::CHAT_RECEIVE_MESSAGE_OP: {
+            // should not be sent by client
             break;
         }
         }
@@ -308,7 +349,8 @@ public:
     {
         logger->info("{}:{} leave", participant->endpoint().address().to_string(), participant->endpoint().port());
         logger->debug("leave: erase participant, participants_.size() = {}", participants_.size());
-        if (participants_.find(participant) != participants_.end()) participants_.erase(participant);
+        if (participants_.find(participant) != participants_.end())
+            participants_.erase(participant);
         logger->debug("leave: erase end, participants_.size() = {}", participants_.size());
     }
 
@@ -382,6 +424,7 @@ public:
     }
     Session(tcp::socket socket, Room& room, bool is_local = false)
         : Participant { is_local }
+        , name_("")
         , socket_(std::move(socket))
         , timer_(socket_.get_executor())
         , room_(room)
