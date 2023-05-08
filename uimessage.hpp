@@ -9,10 +9,18 @@
 #include <optional>
 #include <string_view>
 #include <vector>
+#include <ranges>
+#include <algorithm>
 
 #include "contest.hpp"
 #include "message.hpp"
 #include "rule.hpp"
+
+#ifdef __GNUC__
+#include <range/v3/all.hpp>
+#else
+namespace ranges = std::ranges;
+#endif
 
 using nlohmann::json;
 using std::string;
@@ -84,6 +92,7 @@ _EXPORT struct UiMessage : public Message {
         std::array<std::array<int, rank_n>, rank_n> chessboard;
         int now_playing;
         int move_count;
+        std::vector<Position> disabled_positions;
         GameMetadata metadata;
         std::vector<DynamicStatistics> statistics;
         Game() = default;
@@ -92,12 +101,18 @@ _EXPORT struct UiMessage : public Message {
             , move_count(contest.moves.size())
             , metadata(GameMetadata(contest))
         {
+            auto actions = contest.current.available_actions();
+            auto index = Board::index();
+            disabled_positions = index
+                                | ranges::views::filter([&](auto pos) { return !contest.current.board[pos] && std::find(actions.begin(), actions.end(), pos) == actions.end(); })
+                                | ranges::to<std::vector>();
             const auto board = contest.current.board.to_2darray();
             for (int i = 0; i < rank_n; ++i)
                 for (int j = 0; j < rank_n; ++j)
                     chessboard[i][j] = board[i][j].id;
         }
-        NLOHMANN_DEFINE_TYPE_INTRUSIVE(Game, chessboard, now_playing, move_count, metadata, statistics)
+
+        NLOHMANN_DEFINE_TYPE_INTRUSIVE(Game, chessboard, now_playing, move_count, metadata, statistics, disabled_positions)
     };
     struct UiState {
         bool is_gaming;

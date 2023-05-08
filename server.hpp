@@ -244,6 +244,8 @@ public:
                 });
             }
 
+            auto actions = contest.current.available_actions();
+
             deliver_ui_state();
             break;
         }
