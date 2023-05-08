@@ -488,7 +488,7 @@ private:
             }
         } catch (std::exception& e) {
             logger->error("Exception: {}", e.what());
-            stop();
+            if (!is_local) stop();
         }
     }
 
@@ -510,7 +510,7 @@ private:
             }
         } catch (std::exception& e) {
             logger->error("Exception: {}", e.what());
-            stop();
+            if (!is_local) stop();
         }
     }
 
