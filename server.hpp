@@ -510,6 +510,10 @@ public:
                 received_requests.push(request);
             }
         }
+        if (participant == my_request->receiver) {
+            logger->debug("leave: my_request->receiver == participant, clear my_request");
+            my_request = std::nullopt;
+        }
         logger->debug("leave: erase participant, participants_.size() = {}", participants_.size());
         if (participants_.find(participant) != participants_.end())
             participants_.erase(participant);
