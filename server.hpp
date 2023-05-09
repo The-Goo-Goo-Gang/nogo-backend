@@ -432,8 +432,6 @@ public:
                 logger->debug("receive LEAVE_OP: is local, do close_except");
                 close_except(participant);
             } else {
-                logger->debug("receive LEAVE_OP: deliver_to_local");
-                deliver_to_local({ OpCode::LEAVE_OP, participant->get_name() });
                 logger->debug("receive LEAVE_OP: not local, deliver LEVEL_OP");
                 participant->deliver({ OpCode::LEAVE_OP });
             }
@@ -500,7 +498,8 @@ public:
 
     void leave(Participant_ptr participant)
     {
-        logger->info("{}:{} leave", participant->endpoint().address().to_string(), participant->endpoint().port());
+        logger->info("leave: {}:{} leave", participant->endpoint().address().to_string(), participant->endpoint().port());
+        logger->debug("leave: remove all requests from {}:{} in received_requests", participant->endpoint().address().to_string(), participant->endpoint().port());
         std::queue<ContestRequest> requests {};
         requests.swap(received_requests);
         while (!requests.empty()) {
@@ -513,6 +512,10 @@ public:
         if (participant == my_request->receiver) {
             logger->debug("leave: my_request->receiver == participant, clear my_request");
             my_request = std::nullopt;
+        }
+        if (!participant->get_name().empty()) {
+            logger->debug("leave: participant->get_name() is not empty, send LEAVE_OP to local");
+            deliver_to_local({ OpCode::LEAVE_OP, participant->get_name() });
         }
         logger->debug("leave: erase participant, participants_.size() = {}", participants_.size());
         if (participants_.find(participant) != participants_.end())
