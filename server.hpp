@@ -239,11 +239,9 @@ public:
 
             deliver_to_others(msg, participant); // broadcast
             if (contest.result.winner == opponent.role) {
-                opponent.participant->deliver({ OpCode::WIN_PENDING_OP, std::to_string(std::to_underlying(Contest::WinType::SUICIDE)) });
+                if (!opponent.participant->is_local)
+                    opponent.participant->deliver({ OpCode::WIN_PENDING_OP, std::to_string(std::to_underlying(Contest::WinType::SUICIDE)) });
                 participant->deliver({ OpCode::SUICIDE_END_OP });
-            } else if (contest.result.winner == player.role) {
-                participant->deliver({ OpCode::GIVEUP_OP });
-                opponent.participant->deliver({ OpCode::GIVEUP_END_OP }); // radical
             }
 
             if (contest.status == Contest::Status::ON_GOING) {
@@ -253,7 +251,8 @@ public:
                 timer_.async_wait([this, opponent, participant](const asio::error_code& ec) {
                     if (!ec && !timer_cancelled_) {
                         contest.timeout(opponent);
-                        participant->deliver({ OpCode::WIN_PENDING_OP, std::to_string(std::to_underlying(Contest::WinType::TIMEOUT)) });
+                        if (!opponent.participant->is_local)
+                            participant->deliver({ OpCode::WIN_PENDING_OP, std::to_string(std::to_underlying(Contest::WinType::TIMEOUT)) });
                         opponent.participant->deliver({ OpCode::TIMEOUT_END_OP });
                         deliver_ui_state();
                     }
@@ -275,7 +274,8 @@ public:
             }
 
             contest.concede(player);
-            opponent.participant->deliver({ OpCode::WIN_PENDING_OP, std::to_string(std::to_underlying(Contest::WinType::GIVEUP)) });
+            if (!opponent.participant->is_local)
+                opponent.participant->deliver({ OpCode::WIN_PENDING_OP, std::to_string(std::to_underlying(Contest::WinType::GIVEUP)) });
             participant->deliver({ OpCode::GIVEUP_END_OP });
             timer_cancelled_ = true;
             timer_.cancel();
@@ -287,6 +287,7 @@ public:
         case OpCode::TIMEOUT_END_OP:
         case OpCode::SUICIDE_END_OP:
         case OpCode::GIVEUP_END_OP: {
+            // TODO: CHECK
             deliver_to_others(msg, participant); // broadcast
             break;
         }
