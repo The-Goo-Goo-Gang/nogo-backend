@@ -86,7 +86,7 @@ public:
     */
     void process_data(Message msg, Participant_ptr participant)
     {
-        logger->info("process_data: {} from {}:{}", msg.to_string(), participant->endpoint().address().to_string(), participant->endpoint().port());
+        logger->info("process_data: {} from {}", msg.to_string(), participant->to_string());
         const string_view data1 { msg.data1 }, data2 { msg.data2 };
 
         switch (msg.op) {
@@ -125,9 +125,18 @@ public:
 
             Player player1 { participant, "BLACK", Role::BLACK, PlayerType::LOCAL_HUMAN_PLAYER },
                 player2 { participant, "WHITE", Role::WHITE, PlayerType::LOCAL_HUMAN_PLAYER };
-            contest.enroll(std::move(player1)), contest.enroll(std::move(player2));
+            try {
+                contest.enroll(std::move(player1)), contest.enroll(std::move(player2));
+            } catch (Contest::StatusError& e) {
+                logger->error("Enroll Player: Contest stautus is {}", std::to_underlying(contest.status));
+                break;
+            } catch (std::exception& e) {
+                logger->error("Enroll Player: {}, player1: {}, player2: {}. playerlist: {}.",
+                    e.what(), player1.to_string(), player2.to_string(), contest.players.to_string());
+                contest.players = {};
+                break;
+            }
             contest.local_role = Role::BLACK;
-
             deliver_ui_state();
             break;
         }
@@ -141,10 +150,29 @@ public:
             Position pos { data1 };
             Role role { data2 };
 
-            auto player { contest.players.at(role, participant) };
-            auto opponent { contest.players.at(-player.role) };
+            Player player, opponent;
+            try {
+                player = Player { contest.players.at(role, participant) };
+                opponent = Player { contest.players.at(-player.role) };
+            } catch (std::exception& e) {
+                logger->error("Play: {}", e.what());
+                break;
+            }
 
-            contest.play(player, pos);
+            try {
+                contest.play(player, pos);
+            } catch (Contest::StatusError& e) {
+                logger->error("Play: Contest stautus is {}", std::to_underlying(contest.status));
+                break;
+            } catch (Contest::StonePositionitionOccupiedException& e) {
+                contest.status = Contest::Status::GAME_OVER;
+                contest.result = { opponent.role, Contest::WinType::SUICIDE };
+                logger->warn("Play: {} player play at occupied position {}", role.to_string(), pos.to_string());
+                break;
+            } catch (std::exception& e) {
+                logger->error("Play: {}", e.what());
+                break;
+            }
 
             if (contest.status == Contest::Status::ON_GOING) {
                 timer_.expires_after(contest.duration);
@@ -160,9 +188,8 @@ public:
             deliver_ui_state();
             break;
         }
-
         case OpCode::READY_OP: {
-            std::cout << "ready: is_local = " << participant->is_local << ", data1 = " << data1 << ", data2 = " << data2 << std::endl;
+            logger->info("ready: is_local = {}, data1 = {}, data2 = {}", participant->is_local, data1, data2);
 
             if (contest.status == Contest::Status::GAME_OVER) {
                 contest.clear();
@@ -170,23 +197,33 @@ public:
 
             auto name { data1 };
             Role role { data2 };
-            if (!Player::is_valid_name(name))
+
+            if (!Player::is_valid_name(name)) {
                 name = "Player" + std::to_string(contest.players.size() + 1);
-
-            participant->set_name(name);
-
-            if (participant->is_local) {
-                Player player { participant, name, role, PlayerType::LOCAL_HUMAN_PLAYER };
-                contest.enroll(std::move(player));
-                contest.local_role = role;
-                // TODO: support multiple remote waiting players
-                deliver_to_others(msg, participant);
-            } else {
-                Player player { participant, name, role, PlayerType::REMOTE_HUMAN_PLAYER };
-                contest.enroll(std::move(player));
-                deliver_to_local(msg);
+                logger->warn("READY_OP: invalid name {}, use default name: {}", data1, name);
             }
-
+            participant->set_name(name);
+            Player player;
+            try {
+                if (participant->is_local) {
+                    player = Player { participant, name, role, PlayerType::LOCAL_HUMAN_PLAYER };
+                    contest.enroll(std::move(player));
+                    contest.local_role = role;
+                    // TODO: support multiple remote waiting players
+                    deliver_to_others(msg, participant);
+                } else {
+                    player = Player { participant, name, role, PlayerType::REMOTE_HUMAN_PLAYER };
+                    contest.enroll(std::move(player));
+                    deliver_to_local(msg);
+                }
+            } catch (Contest::StatusError& e) {
+                logger->error("Enroll Player: Contest stautus is {}", std::to_underlying(contest.status));
+                break;
+            } catch (std::exception& e) {
+                logger->error("Enroll Player: {}, player: {}. playerlist: {}.",
+                    e.what(), player.to_string(), contest.players.to_string());
+                break;
+            }
             deliver_ui_state();
             break;
         }
@@ -207,14 +244,36 @@ public:
             std::cout << "timer canceled" << std::endl;
 
             Position pos { data1 };
-            milliseconds ms { stoull(data2) };
+            try {
+                milliseconds ms { stoull(data2) };
+            } catch (std::exception& e) {
+                // TODO:
+            }
 
             // TODO: adjust time
+            Player player, opponent;
+            try {
+                player = Player { contest.players.at(Role::NONE, participant) };
+                opponent = Player { contest.players.at(-player.role) };
+            } catch (std::exception& e) {
+                logger->error("Play: {}", e.what());
+                break;
+            }
 
-            auto player { contest.players.at(Role::NONE, participant) };
-            auto opponent { contest.players.at(-player.role) };
-
-            contest.play(player, pos);
+            try {
+                contest.play(player, pos);
+            } catch (Contest::StatusError& e) {
+                logger->error("Play: Contest stautus is {}", std::to_underlying(contest.status));
+                break;
+            } catch (Contest::StonePositionitionOccupiedException& e) {
+                contest.status = Contest::Status::GAME_OVER;
+                contest.result = { opponent.role, Contest::WinType::SUICIDE };
+                logger->warn("Play: Play at occupied position {}, playerdata: {}", pos.to_string(), player.to_string());
+                break;
+            } catch (std::exception& e) {
+                logger->error("Play: {}", e.what());
+                break;
+            }
 
             deliver_to_others(msg, participant); // broadcast
             if (contest.result.winner == opponent.role) {
@@ -244,14 +303,29 @@ public:
         }
         case OpCode::GIVEUP_OP: {
             Role role { data2 };
-            auto player { contest.players.at(role, participant) };
-            auto opponent { contest.players.at(-player.role) };
+
+            Player player, opponent;
+            try {
+                player = Player { contest.players.at(role, participant) };
+                opponent = Player { contest.players.at(-player.role) };
+            } catch (std::exception& e) {
+                logger->error("Give up: {}", e.what());
+                break;
+            }
 
             if (participant->is_local) {
                 deliver_to_others(msg, participant); // broadcast
             }
 
-            contest.concede(player);
+            try {
+                contest.concede(player);
+            } catch (Contest::StatusError& e) {
+                logger->error("Give up: Contest stautus is {}", std::to_underlying(contest.status));
+                break;
+            } catch (std::logic_error& e) {
+                logger->error("Give up: In {}'s turn, {} is not allowed to concede", contest.current.role.to_string(), player.role.to_string());
+                break;
+            }
             opponent.participant->deliver({ OpCode::WIN_PENDING_OP, std::to_string(std::to_underlying(Contest::WinType::GIVEUP)) });
             participant->deliver({ OpCode::GIVEUP_END_OP });
             timer_cancelled_ = true;
@@ -308,7 +382,8 @@ public:
     {
         logger->info("{}:{} leave", participant->endpoint().address().to_string(), participant->endpoint().port());
         logger->debug("leave: erase participant, participants_.size() = {}", participants_.size());
-        if (participants_.find(participant) != participants_.end()) participants_.erase(participant);
+        if (participants_.find(participant) != participants_.end())
+            participants_.erase(participant);
         logger->debug("leave: erase end, participants_.size() = {}", participants_.size());
     }
 

@@ -117,7 +117,7 @@ auto connect(asio::io_context& io_context,
 {
     tcp::socket socket { io_context };
     try {
-        tcp::endpoint endpoint { asio::ip::make_address(ip), stoi(port) };
+        tcp::endpoint endpoint { asio::ip::make_address(ip), (asio::ip::port_type)stoi(port) };
         co_await socket.async_connect(endpoint, use_awaitable);
         co_return std::make_shared<Session>(std::move(socket));
     } catch (std::exception& e) {
