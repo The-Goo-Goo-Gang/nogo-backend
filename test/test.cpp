@@ -22,7 +22,9 @@ using asio::detached;
 using asio::use_awaitable;
 using asio::ip::tcp;
 
+#include <fmt/format.h>
 #include <fmt/ranges.h>
+
 #include <gtest/gtest.h>
 #include <range/v3/all.hpp>
 
@@ -46,94 +48,48 @@ class Session : public std::enable_shared_from_this<Session> {
 public:
     Session(tcp::socket socket)
         : socket(std::move(socket))
-        , timer(socket.get_executor())
     {
-        timer.expires_at(std::chrono::steady_clock::time_point::max());
-    }
-
-    void start()
-    {
-        co_spawn(
-            socket.get_executor(), [self = shared_from_this()] { return self->reader(); }, detached);
-        co_spawn(
-            socket.get_executor(), [self = shared_from_this()] { return self->writer(); }, detached);
-    }
-
-    void deliver(string msg)
-    {
-        write_msgs.push_back(msg);
-        timer.cancel_one();
     }
 
     void stop()
     {
         socket.close();
-        timer.cancel();
     }
 
-    awaitable<void> reader()
+    auto do_read(size_t count)
     {
-        try {
-            for (std::string read_msg;;) {
-                std::size_t n = co_await asio::async_read_until(socket, asio::dynamic_buffer(read_msg, 1024), "\n", use_awaitable);
-                string msg { read_msg.substr(0, n) };
-                read_msgs.push_back(msg);
-                read_msg.erase(0, n);
+        vector<string> read_msgs;
+        while (count--) {
+            std::size_t bytes_read = asio::read_until(socket, buffer, '\n');
+
+            if (bytes_read == 0) {
+                // connection closed by peer
+                break;
             }
-        } catch (std::exception& e) {
-            std::cerr << "Exception: " << e.what() << "\n";
-            stop();
+
+            std::istream stream(&buffer);
+            std::string message;
+            std::getline(stream, message);
+
+            read_msgs.push_back(message);
         }
+        return read_msgs;
     }
 
-    awaitable<void> writer()
+    void do_write(string msg)
     {
-        try {
-            while (socket.is_open()) {
-                if (write_msgs.empty()) {
-                    asio::error_code ec;
-                    co_await timer.async_wait(redirect_error(use_awaitable, ec));
-                } else {
-                    co_await asio::async_write(socket, asio::buffer(write_msgs.front() + "\n"),
-                        use_awaitable);
-                    write_msgs.pop_front();
-                }
-            }
-        } catch (std::exception& e) {
-            std::cerr << "Exception: " << e.what() << "\n";
-            stop();
-        }
+        asio::write(socket, asio::buffer(msg + '\n'));
     }
 
     tcp::socket socket;
-    asio::steady_timer timer;
-    std::deque<string> write_msgs;
-    std::deque<string> read_msgs;
+    asio::streambuf buffer;
 };
 
-auto connect(asio::io_context& io_context,
-    string_view ip,
-    string_view port) -> awaitable<std::shared_ptr<Session>>
+auto launch_client(asio::io_context& io_context, string_view ip, string_view port)
 {
     tcp::socket socket { io_context };
-    try {
-        tcp::endpoint endpoint { asio::ip::make_address(ip), stoi(port) };
-        co_await socket.async_connect(endpoint, use_awaitable);
-        co_return std::make_shared<Session>(std::move(socket));
-    } catch (std::exception& e) {
-        std::cout << e.what() << "\n";
-    }
-}
-
-bool is_run = false;
-
-auto launch_client(asio::io_context& io_context,
-    string_view ip,
-    string_view port) -> awaitable<std::shared_ptr<Session>>
-{
-    auto session = co_await connect(io_context, ip, port);
-    session->start();
-    co_return session;
+    socket.connect({ asio::ip::make_address(ip), stoi(port) });
+    return std::make_shared<Session>(std::move(socket));
 }
 
 const vector<vector<string>> send_msgs1 {
@@ -151,18 +107,19 @@ const vector<vector<string>> send_msgs2 {
     { R"({"op":200002,"data1":"B1","data2":"1683446068123"})" },
 
     { R"({"op":200005,"data1":"","data2":""})" },
-
-    {},
 };
 
 const vector<vector<string>> recv_msgs1 {
-    {},
-    { R"({"data1":"player2","data2":"","op":200000})" },
+    { R"({"data1":"{TIMEOUT}","data2":"{\"game\":null,\"game_result\":{\"win_type\":0,\"winner\":0},\"is_gaming\":false,\"status\":0}","op":100001})" },
+    { R"({"data1":"player2","data2":"","op":200000})",
+        R"({"data1":"{TIMEOUT}","data2":"{\"game\":{\"chessboard\":[[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0]],\"disabled_positions\":[],\"last_move\":null,\"metadata\":{\"player_opposing\":{\"avatar\":\"\",\"chess_type\":-1,\"name\":\"player2\",\"type\":0},\"player_our\":{\"avatar\":\"\",\"chess_type\":1,\"name\":\"player1\",\"type\":0},\"size\":9,\"turn_timeout\":1918967901},\"move_count\":0,\"now_playing\":1,\"statistics\":[]},\"game_result\":{\"win_type\":0,\"winner\":0},\"is_gaming\":true,\"status\":1}","op":100001})" },
 
-    {},
-    { R"({"data1":"A2","data2":"1683446065123","op":200002})" },
-    {},
-    { R"({"data1":"B1","data2":"1683446068123","op":200002})", R"({"data1":"","data2":"","op":100006})" },
+    { R"({"data1":"{TIMEOUT}","data2":"{\"game\":{\"chessboard\":[[1,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0]],\"disabled_positions\":[],\"last_move\":{\"x\":0,\"y\":0},\"metadata\":{\"player_opposing\":{\"avatar\":\"\",\"chess_type\":-1,\"name\":\"player2\",\"type\":0},\"player_our\":{\"avatar\":\"\",\"chess_type\":1,\"name\":\"player1\",\"type\":0},\"size\":9,\"turn_timeout\":30},\"move_count\":1,\"now_playing\":-1,\"statistics\":[]},\"game_result\":{\"win_type\":0,\"winner\":0},\"is_gaming\":true,\"status\":1}","op":100001})" },
+    { R"({"data1":"A2","data2":"1683446066123","op":200002})",
+        R"({"data1":"{TIMEOUT}","data2":"{\"game\":{\"chessboard\":[[1,-1,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0]],\"disabled_positions\":[],\"last_move\":{\"x\":0,\"y\":1},\"metadata\":{\"player_opposing\":{\"avatar\":\"\",\"chess_type\":-1,\"name\":\"player2\",\"type\":0},\"player_our\":{\"avatar\":\"\",\"chess_type\":1,\"name\":\"player1\",\"type\":0},\"size\":9,\"turn_timeout\":30},\"move_count\":2,\"now_playing\":1,\"statistics\":[]},\"game_result\":{\"win_type\":0,\"winner\":0},\"is_gaming\":true,\"status\":1}","op":100001})" },
+    { R"({"data1":"{TIMEOUT}","data2":"{\"game\":{\"chessboard\":[[1,-1,0,0,0,0,0,0,0],[0,1,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0]],\"disabled_positions\":[{\"x\":1,\"y\":0}],\"last_move\":{\"x\":1,\"y\":1},\"metadata\":{\"player_opposing\":{\"avatar\":\"\",\"chess_type\":-1,\"name\":\"player2\",\"type\":0},\"player_our\":{\"avatar\":\"\",\"chess_type\":1,\"name\":\"player1\",\"type\":0},\"size\":9,\"turn_timeout\":30},\"move_count\":3,\"now_playing\":-1,\"statistics\":[]},\"game_result\":{\"win_type\":0,\"winner\":0},\"is_gaming\":true,\"status\":1}","op":100001})" },
+    { R"({"data1":"B1","data2":"1683446068123","op":200002})",
+        R"({"data1":"{TIMEOUT}","data2":"{\"game\":{\"chessboard\":[[1,-1,0,0,0,0,0,0,0],[-1,1,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0]],\"disabled_positions\":[{\"x\":0,\"y\":2},{\"x\":2,\"y\":0}],\"last_move\":{\"x\":1,\"y\":0},\"metadata\":{\"player_opposing\":{\"avatar\":\"\",\"chess_type\":-1,\"name\":\"player2\",\"type\":0},\"player_our\":{\"avatar\":\"\",\"chess_type\":1,\"name\":\"player1\",\"type\":0},\"size\":9,\"turn_timeout\":30},\"move_count\":4,\"now_playing\":1,\"statistics\":[]},\"game_result\":{\"win_type\":2,\"winner\":1},\"is_gaming\":false,\"status\":2}","op":100001})" },
 
     {},
     { R"({"data1":"","data2":"","op":200005})" },
@@ -184,57 +141,70 @@ const vector<vector<string>> recv_msgs2 {
 #include <stdio.h>
 #include <stdlib.h>
 
-string host, port1, port2;
+string host,
+    port1, port2;
 
 TEST(nogo, server)
 {
 #ifdef _WIN32
-    auto server_cmd = "cmd /c start ./nogo-server " + port1 + " " + port2;
+    constexpr auto server_cmd = "cmd /c start ./nogo-server {} {}";
 #else
-    auto server_cmd = "screen -dmS nogo-server ./nogo-server " + port1 + " " + port2;
+    constexpr auto server_cmd = "screen -dmS nogo-server ./nogo-server {} {}";
 #endif
-    int ret = system(server_cmd.c_str());
+    int ret = system(fmt::format(server_cmd, port1, port2).c_str());
 
     std::this_thread::sleep_for(3s);
 
     asio::io_context io_context { 1 };
 
-    asio::signal_set signals(io_context, SIGINT, SIGTERM);
-    signals.async_wait([&](auto, auto) { io_context.stop(); });
+    auto c1 = launch_client(io_context, host, port1);
+    auto c2 = launch_client(io_context, host, port2);
 
-    co_spawn(
-        io_context, [&]() -> awaitable<void> {
-            auto c1 = co_await launch_client(io_context, host, port1);
-            auto c2 = co_await launch_client(io_context, host, port2);
+    int round { send_msgs1.size() * 2 };
+    for (auto i : ranges::views::iota(0, round)) {
+        auto c { i % 2 ? c2 : c1 };
+        auto send_msg { i % 2 ? send_msgs2[i / 2] : send_msgs1[i / 2] };
 
-            for (auto i { 0 }; auto [send_msg1, send_msg2] : ranges::views::zip(send_msgs1, send_msgs2)) {
-                for (const auto& msg : send_msg1)
-                    std::cout << "msg: " << msg << "\n", c1->deliver(msg);
-                for (auto [read_msg, recv_msg] : ranges::views::zip(c1->read_msgs, recv_msgs1[i]))
-                    EXPECT_EQ(read_msg, recv_msg) << "p1 recv is wrong after p1 send" << fmt::format("{}", send_msg1);
-                c1->read_msgs.clear();
-                for (auto [read_msg, recv_msg] : ranges::views::zip(c2->read_msgs, recv_msgs2[i]))
-                    EXPECT_EQ(read_msg, recv_msg) << "p2 recv is wrong after p1 send" << fmt::format("{}", send_msg1);
-                c2->read_msgs.clear();
-                std::this_thread::sleep_for(3s);
-                ++i;
+        for (auto& msg : send_msg)
+            c->do_write(msg);
 
-                for (const auto& msg : send_msg2)
-                    c2->deliver(msg);
-                for (auto [read_msg, recv_msg] : ranges::views::zip(c1->read_msgs, recv_msgs1[i]))
-                    EXPECT_EQ(read_msg, recv_msg) << "p1 recv is wrong after p2 send" << fmt::format("{}", send_msg2);
-                c1->read_msgs.clear();
-                for (auto [read_msg, recv_msg] : ranges::views::zip(c2->read_msgs, recv_msgs2[i]))
-                    EXPECT_EQ(read_msg, recv_msg) << "p2 recv is wrong after p2 send" << fmt::format("{}", send_msg2);
-                c2->read_msgs.clear();
-                std::this_thread::sleep_for(3s);
-                ++i;
+        auto recv_msg1 = c1->do_read(recv_msgs1[i].size());
+
+        // fmt::print("\033[31mrecv_msg1: {}\033[0m\n", recv_msg1);
+
+        auto recv_msg2 = c2->do_read(recv_msgs2[i].size());
+
+        // fmt::print("\033[32mrecv_msg2: {}\033[0m\n", recv_msg2);
+
+        constexpr string_view placeholder = "{TIMEOUT}";
+        constexpr auto timestamp_len = 10;
+        for (auto [msg, expect] : ranges::views::zip(recv_msg1, recv_msgs1[i])) {
+            auto pos = expect.find(placeholder);
+            if (pos == string::npos) {
+                EXPECT_EQ(msg, expect);
+            } else {
+                EXPECT_EQ(msg.substr(0, pos), expect.substr(0, pos));
+                EXPECT_EQ(msg.substr(pos + timestamp_len), expect.substr(pos + placeholder.size()));
             }
-            co_return;
-        },
-        asio::detached);
+        }
+        for (auto [msg, expect] : ranges::views::zip(recv_msg2, recv_msgs2[i])) {
+            auto pos = expect.find(placeholder);
+            if (pos == string::npos) {
+                EXPECT_EQ(msg, expect);
+            } else {
+                EXPECT_EQ(msg.substr(0, pos), expect.substr(0, pos));
+                EXPECT_EQ(msg.substr(pos + timestamp_len), expect.substr(pos + placeholder.size()));
+            }
+        }
+    }
+    c1->stop();
+    c2->stop();
 
-    io_context.run();
+#ifdef _WIN32
+    system("taskkill /f /im nogo-server.exe");
+#else
+    system("screen -X -S nogo-server quit");
+#endif
 
     // c2.write(sendmsg[6]);
     // c2.close();
