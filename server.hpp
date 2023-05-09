@@ -26,10 +26,12 @@
 #include <asio/use_awaitable.hpp>
 #include <asio/write.hpp>
 
+#include <algorithm>
 #include <chrono>
 #include <deque>
 #include <iostream>
 #include <set>
+#include <stdexcept>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -72,6 +74,27 @@ class Room {
     void deliver_ui_state()
     {
         deliver_to_local(UiMessage { contest });
+    }
+
+    auto receive_participant_name(Participant_ptr participant, std::string_view name)
+    {
+
+        auto new_name { name };
+
+        if (!Player::is_valid_name(new_name)) {
+            if (participant->get_name().empty())
+                new_name = "Player" + std::to_string(contest.players.size() + 1);
+            else
+                new_name = participant->get_name();
+        }
+
+        if (new_name != participant->get_name()) {
+            if (!participant->is_local && !participant->get_name().empty() && new_name != participant->get_name())
+                deliver_to_local({ OpCode::CHAT_USERNAME_UPDATE_OP, participant->get_name(), new_name });
+            participant->set_name(new_name);
+        }
+
+        return new_name;
     }
 
 public:
@@ -168,12 +191,8 @@ public:
                 contest.clear();
             }
 
-            auto name { data1 };
+            auto name { receive_participant_name(participant, data1) };
             Role role { data2 };
-            if (!Player::is_valid_name(name))
-                name = "Player" + std::to_string(contest.players.size() + 1);
-
-            participant->set_name(name);
 
             if (participant->is_local) {
                 Player player { participant, name, role, PlayerType::LOCAL_HUMAN_PLAYER };
@@ -192,6 +211,8 @@ public:
         }
         case OpCode::REJECT_OP: {
             contest.reject();
+
+            receive_participant_name(participant, data1);
 
             if (participant->is_local) {
                 // TODO: support multiple remote waiting players
@@ -239,11 +260,13 @@ public:
                 });
             }
 
+            auto actions = contest.current.available_actions();
+
             deliver_ui_state();
             break;
         }
         case OpCode::GIVEUP_OP: {
-            Role role { data2 };
+            Role role { data1 };
             auto player { contest.players.at(role, participant) };
             auto opponent { contest.players.at(-player.role) };
 
@@ -274,10 +297,10 @@ public:
                 logger->debug("receive LEAVE_OP: is local, do close_except");
                 close_except(participant);
             } else {
+                logger->debug("receive LEAVE_OP: deliver_to_local");
+                deliver_to_local({ OpCode::LEAVE_OP, participant->get_name() });
                 logger->debug("receive LEAVE_OP: not local, shutdown participant");
                 participant->shutdown();
-                logger->debug("receive LEAVE_OP: deliver_to_local");
-                deliver_to_local(msg);
             }
             logger->debug("receive LEAVE_OP: process end");
 
@@ -289,8 +312,44 @@ public:
             while (recent_msgs_.size() > max_recent_msgs)
                 recent_msgs_.pop_front();
 
-            for (auto participant : participants_)
-                participant->deliver(msg);
+            if (participant->is_local) {
+                throw std::logic_error("CHAT_OP should not be sent by local");
+            } else {
+                auto name = participant->get_name();
+                if (name.empty()) {
+                    name = participant->endpoint().address().to_string();
+                }
+                deliver_to_local({ OpCode::CHAT_RECEIVE_MESSAGE_OP, data1, name });
+            }
+            break;
+        }
+        case OpCode::CHAT_SEND_MESSAGE_OP: {
+            if (participant->is_local) {
+                auto success = false;
+                for (auto participant : participants_) {
+                    if (!participant->get_name().empty() && participant->get_name() == data2) {
+                        participant->deliver({ OpCode::CHAT_OP, data1 });
+                        success = true;
+                    } else if (participant->get_name().empty() && participant->endpoint().address().to_string() == data2) {
+                        participant->deliver({ OpCode::CHAT_OP, data1 });
+                        success = true;
+                    }
+                }
+            } else {
+                throw std::logic_error("CHAT_SEND_MESSAGE_OP should not be sent by remote");
+            }
+            break;
+        }
+        case OpCode::CHAT_SEND_BROADCAST_MESSAGE_OP: {
+            if (participant->is_local) {
+                deliver_to_others({ OpCode::CHAT_OP, data1 }, participant);
+            } else {
+                throw std::logic_error("CHAT_SEND_BROADCAST_MESSAGE_OP should not be sent by remote");
+            }
+            break;
+        }
+        case OpCode::CHAT_RECEIVE_MESSAGE_OP: {
+            // should not be sent by client
             break;
         }
         }
@@ -308,7 +367,8 @@ public:
     {
         logger->info("{}:{} leave", participant->endpoint().address().to_string(), participant->endpoint().port());
         logger->debug("leave: erase participant, participants_.size() = {}", participants_.size());
-        if (participants_.find(participant) != participants_.end()) participants_.erase(participant);
+        if (participants_.find(participant) != participants_.end())
+            participants_.erase(participant);
         logger->debug("leave: erase end, participants_.size() = {}", participants_.size());
     }
 
@@ -382,6 +442,7 @@ public:
     }
     Session(tcp::socket socket, Room& room, bool is_local = false)
         : Participant { is_local }
+        , name_("")
         , socket_(std::move(socket))
         , timer_(socket_.get_executor())
         , room_(room)
@@ -443,7 +504,8 @@ private:
             }
         } catch (std::exception& e) {
             logger->error("Exception: {}", e.what());
-            stop();
+            if (!is_local)
+                stop();
         }
     }
 
@@ -465,7 +527,8 @@ private:
             }
         } catch (std::exception& e) {
             logger->error("Exception: {}", e.what());
-            stop();
+            if (!is_local)
+                stop();
         }
     }
 

@@ -9,6 +9,7 @@
 #include <iostream>
 #include <ranges>
 #include <vector>
+#include <nlohmann/json.hpp>
 
 #ifdef __GNUC__
 #include <range/v3/all.hpp>
@@ -48,7 +49,7 @@ _EXPORT struct Position {
         return { x + p.x, y + p.y };
     }
     constexpr explicit operator bool() const { return x >= 0 && y >= 0; }
-    // constexpr auto operator<=>(const Position& p) const = default;
+    constexpr auto operator<=>(const Position& p) const = default;
     auto to_string() const -> std::string
     {
         return std::string(1, 'A' + x) + std::to_string(y + 1);
@@ -57,6 +58,8 @@ _EXPORT struct Position {
         : Position(str[0] - 'A', stoi(str.substr(1)) - 1)
     {
     }
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Position, x, y)
 };
 
 _EXPORT struct Role {

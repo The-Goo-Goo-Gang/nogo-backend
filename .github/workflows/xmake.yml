@@ -30,7 +30,7 @@ jobs:
         Add-Content $env:GITHUB_PATH "C:\tmp_msys2\msys64\mingw64\bin"
         Add-Content $env:GITHUB_PATH "C:\tmp_msys2\msys64\usr\bin"
     - name: Configure XMake
-      run: xmake f -p mingw --mingw=C:/tmp_msys2/msys64/mingw64 -c --ldflags="-LC:\tmp_msys2\msys64\mingw64\lib -lws2_32 -lwsock32" -y
+      run: xmake f -p mingw --mingw=C:/tmp_msys2/msys64/mingw64 -c --ldflags="-LC:\tmp_msys2\msys64\mingw64\lib -lws2_32 -lwsock32 -static" -y
     - name: Upload log when Failure
       if: ${{ failure() }}
       uses: actions/upload-artifact@v2
