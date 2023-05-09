@@ -182,6 +182,8 @@ public:
     Status status {};
     GameResult result {};
     std::chrono::seconds duration;
+    std::chrono::system_clock::time_point start_time;
+    std::chrono::system_clock::time_point end_time;
     Role local_role { Role::NONE };
 
     void clear()
@@ -192,6 +194,7 @@ public:
         status = {};
         result = {};
         should_giveup = false;
+        local_role = Role::NONE;
     }
     void reject()
     {
@@ -209,8 +212,10 @@ public:
             throw std::logic_error("Contest already started");
         }
         players.insert(std::move(player));
-        if (players.contains(Role::BLACK) && players.contains(Role::WHITE))
+        if (players.contains(Role::BLACK) && players.contains(Role::WHITE)) {
             status = Status::ON_GOING;
+            start_time = std::chrono::system_clock::now();
+        }
     }
 
     void play(Player player, Position pos)
@@ -235,6 +240,7 @@ public:
         if (auto winner = current.is_over()) {
             status = Status::GAME_OVER;
             result = { winner, WinType::SUICIDE };
+            end_time = std::chrono::system_clock::now();
         }
         if (!current.available_actions().size())
             should_giveup = true;
@@ -252,6 +258,7 @@ public:
         }
         status = Status::GAME_OVER;
         result = { -player.role, WinType::GIVEUP };
+        end_time = std::chrono::system_clock::now();
     }
 
     void timeout(Player player)
@@ -266,6 +273,7 @@ public:
         }
         status = Status::GAME_OVER;
         result = { -player.role, WinType::TIMEOUT };
+        end_time = std::chrono::system_clock::now();
     }
     auto round() const { return moves.size(); }
 
