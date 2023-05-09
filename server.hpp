@@ -29,15 +29,16 @@
 #include <algorithm>
 #include <chrono>
 #include <deque>
-#include <queue>
 #include <iostream>
 #include <optional>
+#include <queue>
 #include <ranges>
 #include <set>
 #include <stdexcept>
 #include <string>
 #include <tuple>
 #include <vector>
+
 
 #include "contest.hpp"
 #include "log.hpp"
@@ -495,6 +496,15 @@ public:
     void leave(Participant_ptr participant)
     {
         logger->info("{}:{} leave", participant->endpoint().address().to_string(), participant->endpoint().port());
+        std::queue<ContestRequest> requests {};
+        requests.swap(received_requests);
+        while (!requests.empty()) {
+            auto request = requests.front();
+            requests.pop();
+            if (request.sender != participant) {
+                received_requests.push(request);
+            }
+        }
         logger->debug("leave: erase participant, participants_.size() = {}", participants_.size());
         if (participants_.find(participant) != participants_.end())
             participants_.erase(participant);
