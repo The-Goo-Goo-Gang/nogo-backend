@@ -29,7 +29,10 @@
 #include <algorithm>
 #include <chrono>
 #include <deque>
+#include <queue>
 #include <iostream>
+#include <optional>
+#include <ranges>
 #include <set>
 #include <stdexcept>
 #include <string>
@@ -53,22 +56,59 @@ using std::chrono::milliseconds;
 using std::chrono::seconds;
 using std::chrono::system_clock;
 
+#ifdef __GNUC__
+#include <range/v3/all.hpp>
+#else
+namespace ranges = std::ranges;
+#endif
+
 constexpr auto TIMEOUT { 30s };
 
 class Room;
 
 void start_session(asio::io_context&, Room&, asio::error_code&, std::string_view, std::string_view);
 
+struct ContestRequest {
+    enum class Result {
+        ACCEPTED,
+        REJECTED,
+        WAITING,
+    };
+
+    Participant_ptr sender;
+    Participant_ptr receiver;
+    Role role;
+    Result result;
+    std::chrono::system_clock::time_point time;
+
+    ContestRequest(Participant_ptr sender, Participant_ptr receiver, Role role)
+        : sender { sender }
+        , receiver { receiver }
+        , role { role }
+        , result { Result::WAITING }
+        , time { system_clock::now() }
+    {
+    }
+};
+
 class Room {
     Contest contest;
     std::deque<std::string> chats;
+    std::optional<ContestRequest> my_request;
+    std::queue<ContestRequest> received_requests;
 
-    void deliver_to_local(Message msg)
+    Participant_ptr require_local_participant()
     {
         for (auto participant : participants_) {
             if (participant->is_local)
-                participant->deliver(msg);
+                return participant;
         }
+        throw std::logic_error("no local participant");
+    }
+
+    void deliver_to_local(Message msg)
+    {
+        require_local_participant()->deliver(msg);
     }
 
     void deliver_ui_state()
@@ -97,10 +137,34 @@ class Room {
         return new_name;
     }
 
+    void receive_new_request(const ContestRequest& request)
+    {
+        received_requests.push(request);
+        check_received_requests();
+        deliver_ui_state();
+    }
+
+    void check_received_requests()
+    {
+        if (!received_requests.empty()) {
+            auto request = received_requests.front();
+            require_local_participant()->deliver({ OpCode::RECEIVE_REQUEST_OP, request.sender->get_name(), request.role.map("b", "w", "") });
+        }
+    }
+
+    void enroll_players(ContestRequest& request)
+    {
+        Player player1 { request.sender, request.sender->get_name(), request.role, request.sender->is_local ? PlayerType::LOCAL_HUMAN_PLAYER : PlayerType::REMOTE_HUMAN_PLAYER },
+            player2 { request.receiver, request.receiver->get_name(), -request.role, request.receiver->is_local ? PlayerType::LOCAL_HUMAN_PLAYER : PlayerType::REMOTE_HUMAN_PLAYER };
+        contest.enroll(std::move(player1)), contest.enroll(std::move(player2));
+        contest.local_role = request.sender->is_local ? request.role : -request.role;
+    }
+
 public:
     Room(asio::io_context& io_context)
         : timer_ { io_context }
         , io_context_ { io_context }
+        , my_request { std::nullopt }
     {
     }
     /*
@@ -184,6 +248,65 @@ public:
             break;
         }
 
+        case OpCode::UPDATE_USERNAME_OP: {
+            if (!participant->is_local) {
+                throw std::logic_error { "remote participant should not send UPDATE_USERNAME_OP" };
+            }
+            receive_participant_name(participant, data1);
+            break;
+        }
+
+        case OpCode::SEND_REQUEST_OP: {
+            // data1 is host:port, data2 is role
+            auto host { data1.substr(0, data1.find(':')) };
+            auto port { data1.substr(data1.find(':') + 1) };
+            auto ep = tcp::endpoint { asio::ip::make_address(host), static_cast<asio::ip::port_type>(std::stoi(std::string { port })) };
+            Role role { data2 };
+
+            auto participants = participants_ | std::views::filter([ep](auto p) { return p->endpoint() == ep; })
+                | ranges::to<std::vector>();
+
+            if (participants.size() != 1) {
+                throw std::logic_error { "participants.size() != 1" };
+            }
+
+            auto receiver { participants[0] };
+            ContestRequest request { participant, receiver, role };
+            my_request = request;
+            receiver->deliver({ OpCode::READY_OP, participant->get_name(), data2 });
+            break;
+        }
+        case OpCode::RECEIVE_REQUEST_OP: {
+            // should not be sent by client
+            break;
+        }
+        case OpCode::ACCEPT_REQUEST_OP: {
+            if (received_requests.empty()) {
+                throw std::logic_error { "received_requests.empty()" };
+            }
+            auto request = received_requests.front();
+            received_requests.pop();
+            while (!received_requests.empty()) {
+                auto r = received_requests.front();
+                received_requests.pop();
+                r.sender->deliver({ OpCode::REJECT_OP, r.receiver->get_name() });
+            }
+            request.sender->deliver({ OpCode::READY_OP, request.receiver->get_name(), (-request.role).map("b", "w", "") });
+            enroll_players(request);
+            deliver_ui_state();
+            break;
+        }
+        case OpCode::REJECT_REQUEST_OP: {
+            if (received_requests.empty()) {
+                throw std::logic_error { "received_requests.empty()" };
+            }
+            auto request = received_requests.front();
+            received_requests.pop();
+            request.sender->deliver({ OpCode::REJECT_OP, request.receiver->get_name() });
+            check_received_requests();
+            break;
+        }
+
         case OpCode::READY_OP: {
             std::cout << "ready: is_local = " << participant->is_local << ", data1 = " << data1 << ", data2 = " << data2 << std::endl;
 
@@ -195,15 +318,18 @@ public:
             Role role { data2 };
 
             if (participant->is_local) {
-                Player player { participant, name, role, PlayerType::LOCAL_HUMAN_PLAYER };
-                contest.enroll(std::move(player));
-                contest.local_role = role;
-                // TODO: support multiple remote waiting players
-                deliver_to_others(msg, participant);
+                // READY_OP should not be sent by local
+                throw std::logic_error("READY_OP should not be sent by local");
             } else {
-                Player player { participant, name, role, PlayerType::REMOTE_HUMAN_PLAYER };
-                contest.enroll(std::move(player));
-                deliver_to_local(msg);
+                if (my_request.has_value() && participant == my_request->receiver) {
+                    deliver_to_local({ OpCode::RECEIVE_REQUEST_RESULT_OP, "accepted", name });
+                    // contest accepted, enroll players
+                    enroll_players(my_request.value());
+                    my_request = std::nullopt;
+                } else {
+                    // receive request
+                    receive_new_request({ participant, require_local_participant(), role });
+                }
             }
 
             deliver_ui_state();
@@ -212,13 +338,16 @@ public:
         case OpCode::REJECT_OP: {
             contest.reject();
 
-            receive_participant_name(participant, data1);
+            auto name { receive_participant_name(participant, data1) };
 
             if (participant->is_local) {
-                // TODO: support multiple remote waiting players
-                deliver_to_others(msg, participant);
+                // REJECT_OP should not be sent by local
+                throw std::logic_error("REJECT_OP should not be sent by local");
             } else {
-                deliver_to_local(msg);
+                if (my_request.has_value() && participant == my_request->receiver) {
+                    deliver_to_local({ OpCode::RECEIVE_REQUEST_RESULT_OP, "rejected", name });
+                    my_request = std::nullopt;
+                }
             }
             break;
         }
@@ -299,8 +428,8 @@ public:
             } else {
                 logger->debug("receive LEAVE_OP: deliver_to_local");
                 deliver_to_local({ OpCode::LEAVE_OP, participant->get_name() });
-                logger->debug("receive LEAVE_OP: not local, shutdown participant");
-                participant->shutdown();
+                logger->debug("receive LEAVE_OP: not local, deliver LEVEL_OP");
+                participant->deliver({ OpCode::LEAVE_OP });
             }
             logger->debug("receive LEAVE_OP: process end");
 
@@ -434,7 +563,9 @@ public:
     }
     tcp::endpoint endpoint() const override
     {
-        return socket_.local_endpoint();
+        if (is_local)
+            return socket_.local_endpoint();
+        return socket_.remote_endpoint();
     }
     bool operator==(const Participant& participant) const override
     {
@@ -471,7 +602,6 @@ public:
     void stop() override
     {
         logger->debug("stop: {}:{}", endpoint().address().to_string(), std::to_string(endpoint().port()));
-
         logger->debug("stop: leave room");
         room_.leave(shared_from_this());
         logger->debug("stop: close socket");
