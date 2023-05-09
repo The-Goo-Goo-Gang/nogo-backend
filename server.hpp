@@ -499,6 +499,13 @@ public:
     void leave(Participant_ptr participant)
     {
         logger->info("leave: {}:{} leave", participant->endpoint().address().to_string(), participant->endpoint().port());
+        if (participants_.find(participant) == participants_.end()) {
+            logger->info("leave: {}:{} not found", participant->endpoint().address().to_string(), participant->endpoint().port());
+            return;
+        }
+        logger->debug("leave: erase participant, participants_.size() = {}", participants_.size());
+        participants_.erase(participant);
+        logger->debug("leave: erase end, participants_.size() = {}", participants_.size());
         logger->debug("leave: remove all requests from {}:{} in received_requests", participant->endpoint().address().to_string(), participant->endpoint().port());
         std::queue<ContestRequest> requests {};
         requests.swap(received_requests);
@@ -517,10 +524,6 @@ public:
             logger->debug("leave: participant->get_name() is not empty, send LEAVE_OP to local");
             deliver_to_local({ OpCode::LEAVE_OP, participant->get_name() });
         }
-        logger->debug("leave: erase participant, participants_.size() = {}", participants_.size());
-        if (participants_.find(participant) != participants_.end())
-            participants_.erase(participant);
-        logger->debug("leave: erase end, participants_.size() = {}", participants_.size());
     }
 
     void close_except(Participant_ptr participant)
@@ -535,10 +538,6 @@ public:
                 p->deliver({ OpCode::LEAVE_OP });
                 logger->debug("close_except: erase it");
                 it = participants_.erase(it);
-                // logger->debug("close_except: stop");
-                // p->stop();
-                // logger->debug("close_except: shutdown");
-                // p->shutdown();
                 logger->debug("close_except: end");
             } else {
                 logger->debug("close_except: skip self");
@@ -673,8 +672,10 @@ private:
                     co_await asio::async_write(socket_, asio::buffer(msg.to_string() + "\n"),
                         use_awaitable);
                     write_msgs_.pop_front();
-                    if (msg.op == OpCode::LEAVE_OP && !is_local)
+                    if (msg.op == OpCode::LEAVE_OP && !is_local) {
+                        room_.leave(shared_from_this());
                         shutdown();
+                    }
                 }
             }
         } catch (std::exception& e) {
