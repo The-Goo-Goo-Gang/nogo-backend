@@ -590,6 +590,8 @@ public:
     }
     bool operator==(const Participant& participant) const override
     {
+        // TODO: Use a better comparsion
+        if (!get_name().empty() || !participant.get_name().empty()) return get_name() == participant.get_name();
         return endpoint() == participant.endpoint();
     }
     Session(tcp::socket socket, Room& room, bool is_local = false)
