@@ -39,7 +39,6 @@
 #include <tuple>
 #include <vector>
 
-
 #include "contest.hpp"
 #include "log.hpp"
 #include "message.hpp"
@@ -159,6 +158,15 @@ class Room {
             player2 { request.receiver, request.receiver->get_name(), -request.role, request.receiver->is_local ? PlayerType::LOCAL_HUMAN_PLAYER : PlayerType::REMOTE_HUMAN_PLAYER };
         contest.enroll(std::move(player1)), contest.enroll(std::move(player2));
         contest.local_role = request.sender->is_local ? request.role : -request.role;
+    }
+
+    void reject_all_received_requests()
+    {
+        while (!received_requests.empty()) {
+            auto r = received_requests.front();
+            received_requests.pop();
+            r.sender->deliver({ OpCode::REJECT_OP, r.receiver->get_name() });
+        }
     }
 
 public:
@@ -287,11 +295,7 @@ public:
             }
             auto request = received_requests.front();
             received_requests.pop();
-            while (!received_requests.empty()) {
-                auto r = received_requests.front();
-                received_requests.pop();
-                r.sender->deliver({ OpCode::REJECT_OP, r.receiver->get_name() });
-            }
+            reject_all_received_requests();
             request.sender->deliver({ OpCode::READY_OP, request.receiver->get_name(), (-request.role).map("b", "w", "") });
             enroll_players(request);
             deliver_ui_state();
@@ -327,6 +331,7 @@ public:
                     // contest accepted, enroll players
                     enroll_players(my_request.value());
                     my_request = std::nullopt;
+                    reject_all_received_requests();
                 } else {
                     // receive request
                     receive_new_request({ participant, require_local_participant(), role });
