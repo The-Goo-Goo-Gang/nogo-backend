@@ -422,10 +422,12 @@ public:
         case OpCode::SUICIDE_END_OP:
         case OpCode::GIVEUP_END_OP: {
             if (!participant->is_local) {
-                auto gg_op { msg.op };
-
-                if (participant->is_local)
+                auto player { contest.players.at(Role::NONE, participant) };
+                auto opponent { contest.players.at(-player.role) };
+                if (contest.result.winner != player.role) {
                     return;
+                }
+                auto gg_op { msg.op };
                 auto claimed_win_type {
                     gg_op == OpCode::GIVEUP_END_OP        ? Contest::WinType::GIVEUP
                         : gg_op == OpCode::TIMEOUT_END_OP ? Contest::WinType::TIMEOUT
