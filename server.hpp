@@ -164,11 +164,6 @@ public:
             } catch (Contest::StatusError& e) {
                 logger->error("Play: Contest stautus is {}", std::to_underlying(contest.status));
                 break;
-            } catch (Contest::StonePositionitionOccupiedException& e) {
-                contest.status = Contest::Status::GAME_OVER;
-                contest.result = { opponent.role, Contest::WinType::SUICIDE };
-                logger->warn("Play: {} player play at occupied position {}", role.to_string(), pos.to_string());
-                break;
             } catch (std::exception& e) {
                 logger->error("Play: {}", e.what());
                 break;
@@ -205,15 +200,16 @@ public:
             participant->set_name(name);
             Player player;
             try {
+                auto player_type { participant->is_local
+                        ? PlayereType::LOCAL_HUMAN_PLAYER
+                        : PlayerType::REMOTE_HUMAN_PLAYER };
+                player = Player { participant, name, role, player_type };
+                contest.enroll(std::move(player));
                 if (participant->is_local) {
-                    player = Player { participant, name, role, PlayerType::LOCAL_HUMAN_PLAYER };
-                    contest.enroll(std::move(player));
                     contest.local_role = role;
                     // TODO: support multiple remote waiting players
                     deliver_to_others(msg, participant);
                 } else {
-                    player = Player { participant, name, role, PlayerType::REMOTE_HUMAN_PLAYER };
-                    contest.enroll(std::move(player));
                     deliver_to_local(msg);
                 }
             } catch (Contest::StatusError& e) {
@@ -265,11 +261,6 @@ public:
             } catch (Contest::StatusError& e) {
                 logger->error("Play: Contest stautus is {}", std::to_underlying(contest.status));
                 break;
-            } catch (Contest::StonePositionitionOccupiedException& e) {
-                contest.status = Contest::Status::GAME_OVER;
-                contest.result = { opponent.role, Contest::WinType::SUICIDE };
-                logger->warn("Play: Play at occupied position {}, playerdata: {}", pos.to_string(), player.to_string());
-                break;
             } catch (std::exception& e) {
                 logger->error("Play: {}", e.what());
                 break;
@@ -320,10 +311,10 @@ public:
             try {
                 contest.concede(player);
             } catch (Contest::StatusError& e) {
-                logger->error("Give up: Contest stautus is {}", std::to_underlying(contest.status));
+                logger->error("Concede: Contest stautus is {}", std::to_underlying(contest.status));
                 break;
             } catch (std::logic_error& e) {
-                logger->error("Give up: In {}'s turn, {} is not allowed to concede", contest.current.role.to_string(), player.role.to_string());
+                logger->error("Concede: In {}'s turn, {}", contest.current.role.to_string(), e.what());
                 break;
             }
             opponent.participant->deliver({ OpCode::WIN_PENDING_OP, std::to_string(std::to_underlying(Contest::WinType::GIVEUP)) });

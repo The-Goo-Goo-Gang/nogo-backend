@@ -89,18 +89,18 @@ class PlayerList {
     std::vector<Player> players;
 
 public:
-    class PlayerExist : public std::logic_error {
+    class PlayerExistException : public std::logic_error {
         using std::logic_error::logic_error;
     };
-    class PlayerListFull : public std::logic_error {
+    class PlayerListFullException : public std::logic_error {
         using std::logic_error::logic_error;
     };
-    class RoleOccupied : public std::logic_error {
+    class RoleOccupiedException : public std::logic_error {
         using std::logic_error::logic_error;
     };
     auto to_string() const
     {
-        return ranges::views::all(players) | ranges::views::transform([](auto& p) { return p.to_string(); })
+        return players | ranges::views::transform([](auto& p) { return p.to_string(); })
             | ranges::views::join_with(';') | ranges::to<std::string>();
     }
     auto find(Role role, Participant_ptr participant = nullptr)
@@ -135,7 +135,7 @@ public:
     auto insert(Player&& player)
     {
         if (std::ranges::find(players, player) != players.end())
-            throw PlayerExist("Player already in list");
+            throw PlayerExistException("Player already in list");
         if (player.role == Role::NONE) {
             if (contains(Role::BLACK)) {
                 logger->info("role black occupied, so guess role: white");
@@ -144,10 +144,10 @@ public:
                 logger->info("role white occupied, so guess role: black");
                 player.role = Role::BLACK;
             } else
-                throw PlayerListFull("No role for player");
+                throw PlayerListFullException("No role for player");
         }
         if (contains(player.role))
-            throw RoleOccupied("Role already occupied");
+            throw RoleOccupiedException("Role already occupied");
 
         logger->info("Insert player: {}", player.to_string());
         players.push_back(std::move(player));
@@ -174,9 +174,6 @@ public:
     struct GameResult {
         Role winner;
         Contest::WinType win_type;
-    };
-    class StonePositionitionOccupiedException : public std::logic_error {
-        using std::logic_error::logic_error;
     };
     class TimeLimitExceededException : public std::runtime_error {
         using runtime_error::runtime_error;
@@ -227,8 +224,11 @@ public:
             throw StatusError("Contest not started");
         if (current.role != player.role)
             throw std::logic_error(player.name + " not allowed to play");
-        if (current.board[pos])
-            throw StonePositionitionOccupiedException("Stone positionition occupied");
+        if (current.board[pos]) {
+            status = Status::GAME_OVER;
+            result = { -player.role, WinType::SUICIDE };
+            return;
+        }
         logger->info("contest play " + std::to_string(pos.x) + ", " + std::to_string(pos.y));
         current = current.next_state(pos);
         moves.push_back(pos);
