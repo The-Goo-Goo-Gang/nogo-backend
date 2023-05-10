@@ -69,23 +69,15 @@ class Room;
 void start_session(asio::io_context&, Room&, asio::error_code&, std::string_view, std::string_view);
 
 struct ContestRequest {
-    enum class Result {
-        ACCEPTED,
-        REJECTED,
-        WAITING,
-    };
-
     Participant_ptr sender;
     Participant_ptr receiver;
     Role role;
-    Result result;
     std::chrono::system_clock::time_point time;
 
     ContestRequest(Participant_ptr sender, Participant_ptr receiver, Role role)
         : sender { sender }
         , receiver { receiver }
         , role { role }
-        , result { Result::WAITING }
         , time { system_clock::now() }
     {
     }
