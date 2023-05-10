@@ -43,7 +43,6 @@ public:
     virtual tcp::endpoint endpoint() const = 0;
     virtual void deliver(Message msg) = 0;
     virtual void stop() = 0;
-    virtual void shutdown() { }
     virtual bool operator==(const Participant&) const = 0;
 
     auto to_string() const
@@ -139,7 +138,7 @@ public:
             throw std::logic_error("Role already occupied");
         }
 
-        logger->info("Insert player: participant:{}, name:{}, role:{}, type:{},", player.participant.to_string(), player.name, player.role.to_string(), (int)player.type);
+        logger->info("Insert player: participant:{}, name:{}, role:{}, type:{},", player.participant->to_string(), player.name, player.role.to_string(), (int)player.type);
         players.push_back(std::move(player));
     }
     auto size() const
@@ -164,6 +163,7 @@ public:
     struct GameResult {
         Role winner;
         Contest::WinType win_type;
+        bool confirmed;
     };
     class StonePositionitionOccupiedException : public std::logic_error {
         using std::logic_error::logic_error;
@@ -181,6 +181,8 @@ public:
     Status status {};
     GameResult result {};
     std::chrono::seconds duration;
+    std::chrono::system_clock::time_point start_time;
+    std::chrono::system_clock::time_point end_time;
     Role local_role { Role::NONE };
 
     void clear()
@@ -191,6 +193,11 @@ public:
         status = {};
         result = {};
         should_giveup = false;
+        local_role = Role::NONE;
+    }
+    void confirm()
+    {
+        result.confirmed = true;
     }
     void reject()
     {
@@ -208,8 +215,10 @@ public:
             throw std::logic_error("Contest already started");
         }
         players.insert(std::move(player));
-        if (players.contains(Role::BLACK) && players.contains(Role::WHITE))
+        if (players.contains(Role::BLACK) && players.contains(Role::WHITE)) {
             status = Status::ON_GOING;
+            start_time = std::chrono::system_clock::now();
+        }
     }
 
     void play(Player player, Position pos)
@@ -234,6 +243,7 @@ public:
         if (auto winner = current.is_over()) {
             status = Status::GAME_OVER;
             result = { winner, WinType::SUICIDE };
+            end_time = std::chrono::system_clock::now();
         }
         if (!current.available_actions().size())
             should_giveup = true;
@@ -251,6 +261,7 @@ public:
         }
         status = Status::GAME_OVER;
         result = { -player.role, WinType::GIVEUP };
+        end_time = std::chrono::system_clock::now();
     }
 
     void timeout(Player player)
@@ -265,8 +276,10 @@ public:
         }
         status = Status::GAME_OVER;
         result = { -player.role, WinType::TIMEOUT };
+        end_time = std::chrono::system_clock::now();
     }
-    auto round() const { return moves.size(); }
+
+    auto round() const -> int { return moves.size(); }
 
     auto encode() const -> string
     {
