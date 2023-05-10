@@ -138,7 +138,7 @@ public:
             throw std::logic_error("Role already occupied");
         }
 
-        logger->info("Insert player: participant:{}, name:{}, role:{}, type:{},", player.participant.to_string(), player.name, player.role.to_string(), (int)player.type);
+        logger->info("Insert player: participant:{}, name:{}, role:{}, type:{},", player.participant->to_string(), player.name, player.role.to_string(), (int)player.type);
         players.push_back(std::move(player));
     }
     auto size() const
