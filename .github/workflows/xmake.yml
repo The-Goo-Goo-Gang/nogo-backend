@@ -1,13 +1,13 @@
-name: Build with XMake
+name: Build and Test
 
 on:
   push:
-    branches: ["main", "dev", "dev-huancheng"]
+    branches: ["main", "dev", "dev-huancheng", "dev-andy-ci"]
   pull_request:
     branches: ["main", "dev"]
 
 jobs:
-  build:
+  test-windows:
     runs-on: windows-latest
 
     steps:
@@ -52,3 +52,26 @@ jobs:
           name: xmake-artifact
           path: |
             build\mingw\x86_64\release\*.exe
+      - name: Test
+        run:
+          xmake run test
+  test-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up XMake
+        uses: xmake-io/github-action-setup-xmake@v1
+        with:
+          xmake-version: latest
+      - name: Build
+        run: xmake
+      - name: Upload artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: xmake-artifact
+          path: |
+            build/linux/x86_64/release/*.bin
+      - name: Test
+        run:
+          xmake run test
+          
