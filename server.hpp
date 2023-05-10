@@ -201,7 +201,7 @@ public:
             Player player;
             try {
                 auto player_type { participant->is_local
-                        ? PlayereType::LOCAL_HUMAN_PLAYER
+                        ? PlayerType::LOCAL_HUMAN_PLAYER
                         : PlayerType::REMOTE_HUMAN_PLAYER };
                 player = Player { participant, name, role, player_type };
                 contest.enroll(std::move(player));
