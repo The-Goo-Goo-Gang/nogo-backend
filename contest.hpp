@@ -43,7 +43,6 @@ public:
     virtual tcp::endpoint endpoint() const = 0;
     virtual void deliver(Message msg) = 0;
     virtual void stop() = 0;
-    virtual void shutdown() { }
     virtual bool operator==(const Participant&) const = 0;
 
     auto to_string() const

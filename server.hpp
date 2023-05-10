@@ -625,7 +625,8 @@ public:
         logger->debug("stop: end");
     }
 
-    void shutdown() override
+private:
+    void shutdown()
     {
         logger->debug("shutdown: {}:{}", endpoint().address().to_string(), std::to_string(endpoint().port()));
         asio::error_code ec;
@@ -633,7 +634,6 @@ public:
         logger->debug("shutdown: end");
     }
 
-private:
     awaitable<void> reader()
     {
         try {
