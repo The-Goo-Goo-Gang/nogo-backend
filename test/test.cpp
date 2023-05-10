@@ -44,6 +44,27 @@ constexpr auto stoi_base(string_view str)
 }
 constexpr auto stoi = stoi_base<int>;
 
+struct ServerProcess {
+#ifdef _WIN32
+    constexpr static auto exec_cmd { "cmd /c start ./nogo-server {} {}" };
+    constexpr static auto kill_cmd { "taskkill /f /im nogo-server.exe" };
+#else
+    constexpr static auto exec_cmd { "screen -dmS nogo-server ./nogo-server {} {}" };
+    constexpr static auto kill_cmd { "screen -S nogo-server -X stuff \"^C\"" };
+#endif
+
+    ServerProcess(asio::ip::port_type port1, asio::ip::port_type port2)
+    {
+        auto ret = system(fmt::format(exec_cmd, port1, port2).c_str());
+    }
+    ~ServerProcess()
+    {
+        auto ret = system(kill_cmd);
+    }
+};
+
+asio::io_context io_context { 1 };
+
 class Session : public std::enable_shared_from_this<Session> {
 public:
     Session(tcp::socket socket)
@@ -51,29 +72,36 @@ public:
     {
     }
 
-    void stop()
+    ~Session()
     {
         socket.close();
     }
 
+    auto do_read()
+    {
+        io_context.restart();
+        asio::steady_timer timer { io_context, 1000ms };
+        timer.async_wait([&](auto ec) {
+            if (!ec)
+                throw std::runtime_error { fmt::format("timeout reading from {}", to_string()) };
+        });
+        asio::async_read_until(socket, buffer, '\n', [&](auto ec, auto) {
+            if (ec != asio::error::operation_aborted)
+                timer.cancel();
+        });
+        io_context.run();
+
+        std::istream stream(&buffer);
+        std::string message;
+        std::getline(stream, message);
+        return message;
+    }
+
     auto do_read(size_t count)
     {
-        vector<string> read_msgs;
-        while (count--) {
-            std::size_t bytes_read = asio::read_until(socket, buffer, '\n');
-
-            if (bytes_read == 0) {
-                // connection closed by peer
-                break;
-            }
-
-            std::istream stream(&buffer);
-            std::string message;
-            std::getline(stream, message);
-
-            read_msgs.push_back(message);
-        }
-        return read_msgs;
+        return ranges::views::iota(0uL, count)
+            | ranges::views::transform([this](auto) { return do_read(); })
+            | ranges::to<vector<string>>();
     }
 
     void do_write(string msg)
@@ -81,8 +109,14 @@ public:
         asio::write(socket, asio::buffer(msg + '\n'));
     }
 
+    auto to_string() const -> string
+    {
+        return socket.remote_endpoint().address().to_string() + ":" + std::to_string(socket.remote_endpoint().port());
+    }
+
     tcp::socket socket;
     asio::streambuf buffer;
+    bool timeout { false };
 };
 
 auto launch_client(asio::io_context& io_context, string_view ip, string_view port)
@@ -146,19 +180,14 @@ string host,
 
 TEST(nogo, server)
 {
-#ifdef _WIN32
-    constexpr auto server_cmd = "cmd /c start ./nogo-server {} {}";
-#else
-    constexpr auto server_cmd = "screen -dmS nogo-server ./nogo-server {} {}";
-#endif
-    int ret = system(fmt::format(server_cmd, port1, port2).c_str());
+    ServerProcess process { stoi(port1), stoi(port2) };
 
     std::this_thread::sleep_for(3s);
 
-    asio::io_context io_context { 1 };
-
     auto c1 = launch_client(io_context, host, port1);
     auto c2 = launch_client(io_context, host, port2);
+
+    std::this_thread::sleep_for(1s);
 
     int round { send_msgs1.size() * 2 };
     for (auto i : ranges::views::iota(0, round)) {
@@ -168,11 +197,20 @@ TEST(nogo, server)
         for (auto& msg : send_msg)
             c->do_write(msg);
 
-        auto recv_msg1 = c1->do_read(recv_msgs1[i].size());
+        vector<string> recv_msg1, recv_msg2;
 
+        try {
+            recv_msg1 = c1->do_read(recv_msgs1[i].size());
+        } catch (const std::exception& e) {
+            FAIL() << e.what();
+        }
         // fmt::print("\033[31mrecv_msg1: {}\033[0m\n", recv_msg1);
 
-        auto recv_msg2 = c2->do_read(recv_msgs2[i].size());
+        try {
+            recv_msg2 = c2->do_read(recv_msgs2[i].size());
+        } catch (const std::exception& e) {
+            FAIL() << e.what();
+        }
 
         // fmt::print("\033[32mrecv_msg2: {}\033[0m\n", recv_msg2);
 
@@ -197,20 +235,8 @@ TEST(nogo, server)
             }
         }
     }
-    c1->stop();
-    c2->stop();
-
-#ifdef _WIN32
-    system("taskkill /f /im nogo-server.exe");
-#else
-    system("screen -X -S nogo-server quit");
-#endif
-
     // c2.write(sendmsg[6]);
     // c2.close();
-
-    // c1.write(sendmsg[6]);
-    // c1.close();
 }
 int main(int argc, char* argv[])
 {
@@ -221,8 +247,6 @@ int main(int argc, char* argv[])
     host = argv[1];
     port1 = argv[2];
     port2 = argv[3];
-    std::cout << "port1 " << port1 << std::endl;
-    std::cout << "port2 " << port2 << std::endl;
 
     testing::InitGoogleTest();
     return RUN_ALL_TESTS();
