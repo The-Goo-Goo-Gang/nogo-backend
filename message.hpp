@@ -37,6 +37,7 @@ _EXPORT enum class OpCode : int {
     // -------- Contest Request --------
     UPDATE_USERNAME_OP,
     SEND_REQUEST_OP,
+    SEND_REQUEST_BY_USERNAME_OP,
     RECEIVE_REQUEST_OP,
     ACCEPT_REQUEST_OP,
     REJECT_REQUEST_OP,

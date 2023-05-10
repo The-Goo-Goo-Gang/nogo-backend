@@ -89,18 +89,16 @@ class Room {
     std::optional<ContestRequest> my_request;
     std::queue<ContestRequest> received_requests;
 
-    Participant_ptr require_local_participant()
+    Participant_ptr find_local_participant()
     {
-        for (auto participant : participants_) {
-            if (participant->is_local)
-                return participant;
-        }
+        if (auto p = ranges::find_if(participants_, [](auto participant) { return participant->is_local; }); p != participants_.end())
+            return *p;
         throw std::logic_error("no local participant");
     }
 
     void deliver_to_local(Message msg)
     {
-        require_local_participant()->deliver(msg);
+        find_local_participant()->deliver(msg);
     }
 
     void deliver_ui_state()
@@ -291,6 +289,21 @@ public:
             receiver->deliver({ OpCode::READY_OP, participant->get_name(), data2 });
             break;
         }
+        case OpCode::SEND_REQUEST_BY_USERNAME_OP: {
+            // data1 is username, data2 is role
+            auto participants = participants_ | std::views::filter([data1](auto p) { return p->get_name() == data1; })
+                | ranges::to<std::vector>();
+
+            if (participants.size() != 1) {
+                throw std::logic_error { "participants.size() != 1" };
+            }
+
+            auto receiver { participants[0] };
+            ContestRequest request { participant, receiver, Role { data2 } };
+            my_request = request;
+            receiver->deliver({ OpCode::READY_OP, participant->get_name(), data2 });
+            break;
+        }
         case OpCode::RECEIVE_REQUEST_OP: {
             // should not be sent by client
             break;
@@ -343,7 +356,7 @@ public:
                     reject_all_received_requests();
                 } else {
                     // receive request
-                    receive_new_request({ participant, require_local_participant(), role });
+                    receive_new_request({ participant, find_local_participant(), role });
                 }
             }
 
