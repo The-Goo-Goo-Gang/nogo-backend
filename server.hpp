@@ -131,17 +131,11 @@ class Room {
 
     void receive_new_request(const ContestRequest& request)
     {
-        received_requests.push(request);
-        check_received_requests();
-        deliver_ui_state();
-    }
-
-    void check_received_requests()
-    {
-        if (!received_requests.empty()) {
-            auto request = received_requests.front();
-            require_local_participant()->deliver({ OpCode::RECEIVE_REQUEST_OP, request.sender->get_name(), request.role.map("b", "w", "") });
+        if (received_requests.empty()) {
+            deliver_to_local({ OpCode::RECEIVE_REQUEST_OP, request.sender->get_name(), request.role.map("b", "w", "") });
         }
+        received_requests.push(request);
+        deliver_ui_state();
     }
 
     void enroll_players(ContestRequest& request)
@@ -300,7 +294,10 @@ public:
             auto request = received_requests.front();
             received_requests.pop();
             request.sender->deliver({ OpCode::REJECT_OP, request.receiver->get_name() });
-            check_received_requests();
+            if (!received_requests.empty()) {
+                auto next_request = received_requests.front();
+                next_request.receiver->deliver({ OpCode::RECEIVE_REQUEST_OP, next_request.sender->get_name(), next_request.role.map("b", "w", "") });
+            }
             break;
         }
 
@@ -386,8 +383,6 @@ public:
                     }
                 });
             }
-
-            auto actions = contest.current.available_actions();
 
             deliver_ui_state();
             break;
@@ -501,12 +496,17 @@ public:
         logger->debug("leave: remove all requests from {}:{} in received_requests", participant->endpoint().address().to_string(), participant->endpoint().port());
         std::queue<ContestRequest> requests {};
         requests.swap(received_requests);
+        auto is_first { !requests.empty() && requests.front().sender == participant };
         while (!requests.empty()) {
             auto request = requests.front();
             requests.pop();
             if (request.sender != participant) {
                 received_requests.push(request);
             }
+        }
+        if (is_first && !received_requests.empty()) {
+            logger->debug("leave: is_first && !received_requests.empty(), send received_requests.front() to local");
+            deliver_to_local({ OpCode::RECEIVE_REQUEST_OP, received_requests.front().sender->get_name(), received_requests.front().role.map("b", "w", "") });
         }
         if (participant == my_request->receiver) {
             logger->debug("leave: my_request->receiver == participant, clear my_request");
@@ -583,7 +583,8 @@ public:
     bool operator==(const Participant& participant) const override
     {
         // TODO: Use a better comparsion
-        if (!get_name().empty() || !participant.get_name().empty()) return get_name() == participant.get_name();
+        if (!get_name().empty() || !participant.get_name().empty())
+            return get_name() == participant.get_name();
         return endpoint() == participant.endpoint();
     }
     Session(tcp::socket socket, Room& room, bool is_local = false)
