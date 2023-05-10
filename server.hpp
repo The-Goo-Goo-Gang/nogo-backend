@@ -72,13 +72,13 @@ struct ContestRequest {
     Participant_ptr sender;
     Participant_ptr receiver;
     Role role;
-    std::chrono::system_clock::time_point time;
+    system_clock::time_point time;
 
-    ContestRequest(Participant_ptr sender, Participant_ptr receiver, Role role)
+    ContestRequest(Participant_ptr sender, Participant_ptr receiver, Role role, system_clock::time_point time = system_clock::now())
         : sender { sender }
         , receiver { receiver }
         , role { role }
-        , time { system_clock::now() }
+        , time { time }
     {
     }
 };
@@ -440,28 +440,28 @@ public:
                 auto player { contest.players.at(Role::NONE, participant) };
                 auto opponent { contest.players.at(-player.role) };
                 if (contest.result.winner == player.role) {
-                auto gg_op { msg.op };
-                auto claimed_win_type {
-                    gg_op == OpCode::GIVEUP_END_OP        ? Contest::WinType::GIVEUP
-                        : gg_op == OpCode::TIMEOUT_END_OP ? Contest::WinType::TIMEOUT
-                                                          : Contest::WinType::SUICIDE
-                };
-                auto result_valid { claimed_win_type == contest.result.win_type };
-                // Use lenient validation for timeout
-                if (claimed_win_type == Contest::WinType::TIMEOUT && !result_valid) {
-                    auto remain_time { std::chrono::duration_cast<milliseconds>(timer_.expiry() - std::chrono::steady_clock::now()) };
-                    // 270ms is the median human reaction time (reference: https://humanbenchmark.com/tests/reactiontime/statistics)
-                    if (remain_time < 270ms) {
-                        result_valid = true;
+                    auto gg_op { msg.op };
+                    auto claimed_win_type {
+                        gg_op == OpCode::GIVEUP_END_OP        ? Contest::WinType::GIVEUP
+                            : gg_op == OpCode::TIMEOUT_END_OP ? Contest::WinType::TIMEOUT
+                                                              : Contest::WinType::SUICIDE
+                    };
+                    auto result_valid { claimed_win_type == contest.result.win_type };
+                    // Use lenient validation for timeout
+                    if (claimed_win_type == Contest::WinType::TIMEOUT && !result_valid) {
+                        auto remain_time { std::chrono::duration_cast<milliseconds>(timer_.expiry() - std::chrono::steady_clock::now()) };
+                        // 270ms is the median human reaction time (reference: https://humanbenchmark.com/tests/reactiontime/statistics)
+                        if (remain_time < 270ms) {
+                            result_valid = true;
+                        }
                     }
-                }
-                if (result_valid) {
+                    if (result_valid) {
                         contest.confirm();
-                    // reply same GG_OP to confirm
-                    participant->deliver(msg);
-                } else {
-                    // result is not valid, do nothing
-                }
+                        // reply same GG_OP to confirm
+                        participant->deliver(msg);
+                    } else {
+                        // result is not valid, do nothing
+                    }
                 } else if (contest.result.winner == opponent.role) {
                     contest.confirm();
                 }
