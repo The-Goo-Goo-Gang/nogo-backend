@@ -155,6 +155,26 @@ class Room {
         }
     }
 
+    void check_online_contest_result()
+    {
+        if (contest.status == Contest::Status::GAME_OVER) {
+            auto winner { contest.players.at(contest.result.winner) };
+            auto loser { contest.players.at(-winner.role) };
+
+            auto gg_op {
+                contest.result.win_type == Contest::WinType::GIVEUP        ? OpCode::GIVEUP_END_OP
+                    : contest.result.win_type == Contest::WinType::TIMEOUT ? OpCode::TIMEOUT_END_OP
+                                                                           : OpCode::SUICIDE_END_OP
+            };
+            if (winner.participant->is_local) {
+                winner.participant->deliver({ OpCode::WIN_PENDING_OP, std::to_string(std::to_underlying(contest.result.win_type)) });
+                loser.participant->deliver({ gg_op });
+            } else {
+                // do nothing, waiting for GG_OP to confirm
+            }
+        }
+    }
+
 public:
     Room(asio::io_context& io_context)
         : timer_ { io_context }
@@ -362,13 +382,7 @@ public:
             contest.play(player, pos);
 
             deliver_to_others(msg, participant); // broadcast
-            if (contest.result.winner == opponent.role) {
-                opponent.participant->deliver({ OpCode::WIN_PENDING_OP, std::to_string(std::to_underlying(Contest::WinType::SUICIDE)) });
-                participant->deliver({ OpCode::SUICIDE_END_OP });
-            } else if (contest.result.winner == player.role) {
-                participant->deliver({ OpCode::GIVEUP_OP });
-                opponent.participant->deliver({ OpCode::GIVEUP_END_OP }); // radical
-            }
+            check_online_contest_result();
 
             if (contest.status == Contest::Status::ON_GOING) {
                 contest.duration = TIMEOUT;
@@ -377,8 +391,7 @@ public:
                 timer_.async_wait([this, opponent, participant](const asio::error_code& ec) {
                     if (!ec && !timer_cancelled_) {
                         contest.timeout(opponent);
-                        participant->deliver({ OpCode::WIN_PENDING_OP, std::to_string(std::to_underlying(Contest::WinType::TIMEOUT)) });
-                        opponent.participant->deliver({ OpCode::TIMEOUT_END_OP });
+                        check_online_contest_result();
                         deliver_ui_state();
                     }
                 });
@@ -397,11 +410,10 @@ public:
             }
 
             contest.concede(player);
-            opponent.participant->deliver({ OpCode::WIN_PENDING_OP, std::to_string(std::to_underlying(Contest::WinType::GIVEUP)) });
-            participant->deliver({ OpCode::GIVEUP_END_OP });
             timer_cancelled_ = true;
             timer_.cancel();
 
+            check_online_contest_result();
             deliver_ui_state();
             break;
         }
@@ -409,7 +421,32 @@ public:
         case OpCode::TIMEOUT_END_OP:
         case OpCode::SUICIDE_END_OP:
         case OpCode::GIVEUP_END_OP: {
-            deliver_to_others(msg, participant); // broadcast
+            if (!participant->is_local) {
+                auto gg_op { msg.op };
+
+                if (participant->is_local)
+                    return;
+                auto claimed_win_type {
+                    gg_op == OpCode::GIVEUP_END_OP        ? Contest::WinType::GIVEUP
+                        : gg_op == OpCode::TIMEOUT_END_OP ? Contest::WinType::TIMEOUT
+                                                          : Contest::WinType::SUICIDE
+                };
+                auto result_valid { claimed_win_type == contest.result.win_type };
+                // Use lenient validation for timeout
+                if (claimed_win_type == Contest::WinType::TIMEOUT && !result_valid) {
+                    auto remain_time { std::chrono::duration_cast<milliseconds>(timer_.expiry() - std::chrono::steady_clock::now()) };
+                    // 270ms is the median human reaction time (reference: https://humanbenchmark.com/tests/reactiontime/statistics)
+                    if (remain_time < 270ms) {
+                        result_valid = true;
+                    }
+                }
+                if (result_valid) {
+                    // reply same GG_OP to confirm
+                    participant->deliver(msg);
+                } else {
+                    // result is not valid, do nothing
+                }
+            }
             break;
         }
 
