@@ -275,7 +275,8 @@ public:
         result = { -player.role, WinType::TIMEOUT };
         end_time = std::chrono::system_clock::now();
     }
-    auto round() const { return moves.size(); }
+    
+    auto round() const -> int { return moves.size(); }
 
     auto encode() const -> string
     {

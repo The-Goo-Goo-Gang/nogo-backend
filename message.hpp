@@ -40,7 +40,7 @@ _EXPORT enum class OpCode : int {
     RECEIVE_REQUEST_OP,
     ACCEPT_REQUEST_OP,
     REJECT_REQUEST_OP,
-    RECEIVE_REQUEST_RESULT_OP
+    RECEIVE_REQUEST_RESULT_OP,
     // -------- Extend OpCode End --------
 };
 

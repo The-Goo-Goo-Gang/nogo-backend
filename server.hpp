@@ -576,9 +576,7 @@ public:
     }
     tcp::endpoint endpoint() const override
     {
-        if (is_local)
-            return socket_.local_endpoint();
-        return socket_.remote_endpoint();
+        return is_local ? socket_.local_endpoint() : socket_.remote_endpoint();
     }
     bool operator==(const Participant& participant) const override
     {

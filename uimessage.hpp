@@ -1,6 +1,4 @@
 #pragma once
-#include <bits/chrono.h>
-#include <chrono>
 #ifndef _EXPORT
 #define _EXPORT
 #endif
@@ -8,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <ctime>
+#include <chrono>
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <ranges>
@@ -103,7 +102,7 @@ _EXPORT struct UiMessage : public Message {
         Game() = default;
         Game(const Contest& contest)
             : now_playing(contest.current.role.id)
-            , move_count(contest.moves.size())
+            , move_count(contest.round())
             , metadata(GameMetadata(contest))
             , last_move(contest.moves.empty() ? std::nullopt : std::optional<Position>(contest.moves.back()))
             , start_time { std::chrono::duration_cast<std::chrono::milliseconds>(contest.start_time.time_since_epoch()).count() }
