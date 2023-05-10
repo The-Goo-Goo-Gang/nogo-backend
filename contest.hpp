@@ -163,6 +163,7 @@ public:
     struct GameResult {
         Role winner;
         Contest::WinType win_type;
+        bool confirmed;
     };
     class StonePositionitionOccupiedException : public std::logic_error {
         using std::logic_error::logic_error;
@@ -193,6 +194,10 @@ public:
         result = {};
         should_giveup = false;
         local_role = Role::NONE;
+    }
+    void confirm()
+    {
+        result.confirmed = true;
     }
     void reject()
     {
@@ -273,7 +278,7 @@ public:
         result = { -player.role, WinType::TIMEOUT };
         end_time = std::chrono::system_clock::now();
     }
-    
+
     auto round() const -> int { return moves.size(); }
 
     auto encode() const -> string

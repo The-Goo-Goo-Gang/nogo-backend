@@ -434,12 +434,12 @@ public:
         case OpCode::TIMEOUT_END_OP:
         case OpCode::SUICIDE_END_OP:
         case OpCode::GIVEUP_END_OP: {
+            if (contest.result.confirmed)
+                break;
             if (!participant->is_local) {
                 auto player { contest.players.at(Role::NONE, participant) };
                 auto opponent { contest.players.at(-player.role) };
-                if (contest.result.winner != player.role) {
-                    return;
-                }
+                if (contest.result.winner == player.role) {
                 auto gg_op { msg.op };
                 auto claimed_win_type {
                     gg_op == OpCode::GIVEUP_END_OP        ? Contest::WinType::GIVEUP
@@ -456,11 +456,17 @@ public:
                     }
                 }
                 if (result_valid) {
+                        contest.confirm();
                     // reply same GG_OP to confirm
                     participant->deliver(msg);
                 } else {
                     // result is not valid, do nothing
                 }
+                } else if (contest.result.winner == opponent.role) {
+                    contest.confirm();
+                }
+
+                deliver_ui_state();
             }
             break;
         }
