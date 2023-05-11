@@ -18,17 +18,10 @@ jobs:
         uses: xmake-io/github-action-setup-xmake@v1
         with:
           xmake-version: latest
-      - name: Upload log when Failure
-        if: ${{ failure() }}
-        uses: actions/upload-artifact@v2
-        with:
-          name: xmake-log
-          path:
-            C:\Users\runneradmin\AppData\Local\.xmake\cache\packages\2304\r\range-v3\0.12.0\installdir.failed\logs\install.txt
       - name: Build
         run: |
-          xmake f -p mingw
-          xmake -y
+          xmake f -p mingw -y
+          xmake
       - name: Upload artifact
         uses: actions/upload-artifact@v2
         with:
