@@ -6,6 +6,10 @@
 #include <thread>
 #include <vector>
 
+#ifdef _WIN32
+#define uZ ull
+#endif
+
 using std::string;
 using std::string_view;
 using std::vector;
