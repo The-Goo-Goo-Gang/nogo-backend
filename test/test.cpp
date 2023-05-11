@@ -7,7 +7,10 @@
 #include <vector>
 
 #ifdef _WIN32
-#define uZ ull
+size_t operator"" uZ(unsigned long long val)
+{
+    return { val };
+}
 #endif
 
 using std::string;
