@@ -23,7 +23,7 @@ jobs:
           xmake f -p mingw --ldflags="-lws2_32 -lwsock32" -y
           xmake
       - name: Upload artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: xmake-artifact
           path:
@@ -42,7 +42,7 @@ jobs:
       - name: Build
         run: xmake -y
       - name: Upload artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: xmake-artifact
           path: |
@@ -61,7 +61,7 @@ jobs:
       - name: Build
         run: xmake -y
       - name: Upload artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: xmake-artifact
           path: |
