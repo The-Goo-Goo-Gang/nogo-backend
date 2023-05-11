@@ -20,7 +20,7 @@ jobs:
           xmake-version: latest
       - name: Build
         run: |
-          xmake f -p mingw -y
+          xmake f -p mingw --ldflags="-lws2_32" -y
           xmake
       - name: Upload artifact
         uses: actions/upload-artifact@v2
