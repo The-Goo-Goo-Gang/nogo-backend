@@ -46,7 +46,7 @@ jobs:
         with:
           name: xmake-artifact
           path: |
-            build\windows\x86_64\release\*.exe
+            build\windows\x64\release\*.exe
       - name: Test
         run:
           xmake run test
@@ -65,7 +65,7 @@ jobs:
         with:
           name: xmake-artifact
           path: |
-            build/linux/x86_64/release/*.bin
+            build/linux/x86_64/release/*
       - name: Test
         run:
           xmake run test
