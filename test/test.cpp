@@ -125,7 +125,7 @@ public:
 auto launch_client(asio::io_context& io_context, string_view ip, string_view port)
 {
     tcp::socket socket { io_context };
-    socket.connect({ asio::ip::make_address(ip), stoi(port) });
+    socket.connect({ asio::ip::make_address(ip), static_cast<asio::ip::port_type>(stoi(port)) });
     return std::make_shared<Session>(std::move(socket));
 }
 
@@ -189,8 +189,8 @@ TEST(nogo, server)
 
     std::this_thread::sleep_for(1s);
 
-    int round { send_msgs1.size() * 2 };
-    for (auto i : ranges::views::iota(0, round)) {
+    auto round { send_msgs1.size() * 2 };
+    for (auto i : ranges::views::iota(0uZ, round)) {
         auto c { i % 2 ? c2 : c1 };
         auto send_msg { i % 2 ? send_msgs2[i / 2] : send_msgs1[i / 2] };
 

@@ -180,10 +180,6 @@ public:
         , my_request { std::nullopt }
     {
     }
-    /*
-    建立连接成功时，客户端是请求对局方，也就是服务端在收到客户端任何通信前不与客户端进行交流。
-    对局结束后，或暂时拒绝后，想再来一局（重发）的是请求对局方。另外，如果已经收到对方想再来一局了，程序应该阻止本方重复发送请求，而引导先接受或拒绝。你可以不处理因信息传输导致的同时发送，你可以假设不存在这种情况。
-    */
     void process_data(Message msg, Participant_ptr participant)
     {
         logger->info("process_data: {} from {}:{}", msg.to_string(), participant->endpoint().address().to_string(), participant->endpoint().port());
