@@ -163,7 +163,7 @@ public:
             try {
                 contest.play(player, pos);
             } catch (Contest::StatusError& e) {
-                logger->error("Ignore move: {], Contest status is {}", e.what(), std::to_underlying(contest.status));
+                logger->error("Ignore move: {}, Contest status is {}", e.what(), std::to_underlying(contest.status));
                 break;
             } catch (std::exception& e) {
                 logger->error("Ignore move: {}, player:{}", e.what(), player.to_string());
@@ -253,15 +253,15 @@ public:
                 player = Player { contest.players.at(Role::NONE, participant) };
                 opponent = Player { contest.players.at(-player.role) };
             } catch (std::exception& e) {
-                logger->error("Ignore move: {}, playerlist: {}, try to find role {}, participant {}",
-                    e.what(), contest.players.to_string(), role.to_string(), participant->to_string());
+                logger->error("Ignore move: {}, playerlist: {}, try to find participant {}",
+                    e.what(), contest.players.to_string(), participant->to_string());
                 break;
             }
 
             try {
                 contest.play(player, pos);
             } catch (Contest::StatusError& e) {
-                logger->error("Ignore move: {], Contest status is {}", e.what(), std::to_underlying(contest.status));
+                logger->error("Ignore move: {}, Contest status is {}", e.what(), std::to_underlying(contest.status));
                 break;
             } catch (std::exception& e) {
                 logger->error("Ignore move: {}, player:{}", e.what(), player.to_string());
@@ -314,7 +314,7 @@ public:
             try {
                 contest.concede(player);
             } catch (Contest::StatusError& e) {
-                logger->error("Ignore concede: {}, Contest status is {}", e.what {}, std::to_underlying(contest.status));
+                logger->error("Ignore concede: {}, Contest status is {}", e.what(), std::to_underlying(contest.status));
                 break;
             } catch (std::logic_error& e) {
                 logger->error("Concede: In {}'s turn, {}", contest.current.role.to_string(), e.what());
