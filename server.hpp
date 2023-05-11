@@ -128,10 +128,10 @@ public:
             try {
                 contest.enroll(std::move(player1)), contest.enroll(std::move(player2));
             } catch (Contest::StatusError& e) {
-                logger->error("Enroll Player: Contest stautus is {}", std::to_underlying(contest.status));
+                logger->error("Ignore enroll player: {}, Contest status is {}", e.what(), std::to_underlying(contest.status));
                 break;
             } catch (std::exception& e) {
-                logger->error("Enroll Player: {}, player1: {}, player2: {}. playerlist: {}.",
+                logger->error("Ignore enroll Player: {}, player1: {}, player2: {}. playerlist: {}.",
                     e.what(), player1.to_string(), player2.to_string(), contest.players.to_string());
                 contest.players = {};
                 break;
@@ -155,17 +155,18 @@ public:
                 player = Player { contest.players.at(role, participant) };
                 opponent = Player { contest.players.at(-player.role) };
             } catch (std::exception& e) {
-                logger->error("Play: {}", e.what());
+                logger->error("Ignore move: {}, playerlist: {}, try to find role {}, participant {}",
+                    e.what(), contest.players.to_string(), role.to_string(), participant->to_string());
                 break;
             }
 
             try {
                 contest.play(player, pos);
             } catch (Contest::StatusError& e) {
-                logger->error("Play: Contest stautus is {}", std::to_underlying(contest.status));
+                logger->error("Ignore move: {], Contest status is {}", e.what(), std::to_underlying(contest.status));
                 break;
             } catch (std::exception& e) {
-                logger->error("Play: {}", e.what());
+                logger->error("Ignore move: {}, player:{}", e.what(), player.to_string());
                 break;
             }
 
@@ -198,27 +199,27 @@ public:
                 logger->warn("READY_OP: invalid name {}, use default name: {}", data1, name);
             }
             participant->set_name(name);
-            Player player;
+            auto player_type { participant->is_local
+                    ? PlayerType::LOCAL_HUMAN_PLAYER
+                    : PlayerType::REMOTE_HUMAN_PLAYER };
+            Player player { participant, name, role, player_type };
             try {
-                auto player_type { participant->is_local
-                        ? PlayerType::LOCAL_HUMAN_PLAYER
-                        : PlayerType::REMOTE_HUMAN_PLAYER };
-                player = Player { participant, name, role, player_type };
                 contest.enroll(std::move(player));
-                if (participant->is_local) {
-                    contest.local_role = role;
-                    // TODO: support multiple remote waiting players
-                    deliver_to_others(msg, participant);
-                } else {
-                    deliver_to_local(msg);
-                }
+
             } catch (Contest::StatusError& e) {
-                logger->error("Enroll Player: Contest stautus is {}", std::to_underlying(contest.status));
+                logger->error("Ignore enroll player: Contest status is {}", e.what(), std::to_underlying(contest.status));
                 break;
             } catch (std::exception& e) {
-                logger->error("Enroll Player: {}, player: {}. playerlist: {}.",
+                logger->error("Ignore enroll Player: {}, player: {}. playerlist: {}.",
                     e.what(), player.to_string(), contest.players.to_string());
                 break;
+            }
+            if (participant->is_local) {
+                contest.local_role = role;
+                // TODO: support multiple remote waiting players
+                deliver_to_others(msg, participant);
+            } else {
+                deliver_to_local(msg);
             }
             deliver_ui_state();
             break;
@@ -252,17 +253,18 @@ public:
                 player = Player { contest.players.at(Role::NONE, participant) };
                 opponent = Player { contest.players.at(-player.role) };
             } catch (std::exception& e) {
-                logger->error("Play: {}", e.what());
+                logger->error("Ignore move: {}, playerlist: {}, try to find role {}, participant {}",
+                    e.what(), contest.players.to_string(), role.to_string(), participant->to_string());
                 break;
             }
 
             try {
                 contest.play(player, pos);
             } catch (Contest::StatusError& e) {
-                logger->error("Play: Contest stautus is {}", std::to_underlying(contest.status));
+                logger->error("Ignore move: {], Contest status is {}", e.what(), std::to_underlying(contest.status));
                 break;
             } catch (std::exception& e) {
-                logger->error("Play: {}", e.what());
+                logger->error("Ignore move: {}, player:{}", e.what(), player.to_string());
                 break;
             }
 
@@ -300,7 +302,8 @@ public:
                 player = Player { contest.players.at(role, participant) };
                 opponent = Player { contest.players.at(-player.role) };
             } catch (std::exception& e) {
-                logger->error("Give up: {}", e.what());
+                logger->error("Ignore give up: {}, playerlist: {}, try to find role {}, participant {}",
+                    e.what(), contest.players.to_string(), role.to_string(), participant->to_string());
                 break;
             }
 
@@ -311,7 +314,7 @@ public:
             try {
                 contest.concede(player);
             } catch (Contest::StatusError& e) {
-                logger->error("Concede: Contest stautus is {}", std::to_underlying(contest.status));
+                logger->error("Ignore concede: {}, Contest status is {}", e.what {}, std::to_underlying(contest.status));
                 break;
             } catch (std::logic_error& e) {
                 logger->error("Concede: In {}'s turn, {}", contest.current.role.to_string(), e.what());
