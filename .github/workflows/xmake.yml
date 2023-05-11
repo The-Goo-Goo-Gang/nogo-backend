@@ -7,24 +7,45 @@ on:
     branches: ["main", "dev"]
 
 jobs:
-  test-windows:
+  windows-mingw:
     runs-on: windows-latest
 
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up MinGW
+        uses: egor-tensin/setup-mingw@v2
+      - name: Set up XMake
+        uses: xmake-io/github-action-setup-xmake@v1
+        with:
+          xmake-version: latest
+      - name: Upload log when Failure
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v2
+        with:
+          name: xmake-log
+          path:
+            C:\Users\runneradmin\AppData\Local\.xmake\cache\packages\2304\r\range-v3\0.12.0\installdir.failed\logs\install.txt
+      - name: Build
+        run: |
+          xmake f -p mingw
+          xmake -y
+      - name: Upload artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: xmake-artifact
+          path:
+            build\mingw\x86_64\release\*.exe
+      - name: Test
+        run:
+          xmake run test
+  windows-msvc:
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v3
       - name: Set up XMake
         uses: xmake-io/github-action-setup-xmake@v1
         with:
           xmake-version: latest
-      - name: Set up MinGW
-        uses: egor-tensin/setup-mingw@v2
-      - name: Upload log when Failure
-        if: ${{ failure() }}
-        uses: actions/upload-artifact@v2
-        with:
-          name: xmake-log
-          path: |
-            C:\Users\runneradmin\AppData\Local\.xmake\cache\packages\2304\r\range-v3\0.12.0\installdir.failed\logs\install.txt
       - name: Build
         run: xmake -y
       - name: Upload artifact
@@ -32,11 +53,11 @@ jobs:
         with:
           name: xmake-artifact
           path: |
-            build\mingw\x86_64\release\*.exe
+            build/linux/x86_64/release/*.bin
       - name: Test
         run:
           xmake run test
-  test-linux:
+  ubuntu-gcc:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
