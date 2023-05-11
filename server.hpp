@@ -295,8 +295,7 @@ public:
             break;
         }
         case OpCode::GIVEUP_OP: {
-            Role role { data2 };
-
+            Role role { participant->is_local ? Role(data1) : Role::NONE };
             Player player, opponent;
             try {
                 player = Player { contest.players.at(role, participant) };
