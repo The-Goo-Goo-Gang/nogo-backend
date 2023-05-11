@@ -44,18 +44,21 @@ constexpr auto stoi_base(string_view str)
 }
 constexpr auto stoi = stoi_base<int>;
 
+constexpr auto host = "127.0.0.1",
+               port1 = "2333", port2 = "2334";
+
 struct ServerProcess {
 #ifdef _WIN32
-    constexpr static auto exec_cmd { "cmd /c start ./nogo-server {} {}" };
+    constexpr static auto exec_cmd { "cmd /c start ./nogo-server 2333 2334" };
     constexpr static auto kill_cmd { "taskkill /f /im nogo-server.exe" };
 #else
-    constexpr static auto exec_cmd { "screen -dmS nogo-server ./nogo-server {} {}" };
+    constexpr static auto exec_cmd { "screen -dmS nogo-server ./nogo-server 2333 2334" };
     constexpr static auto kill_cmd { "screen -S nogo-server -X stuff \"^C\"" };
 #endif
 
-    ServerProcess(asio::ip::port_type port1, asio::ip::port_type port2)
+    ServerProcess()
     {
-        auto ret = system(fmt::format(exec_cmd, port1, port2).c_str());
+        auto ret = system(exec_cmd);
     }
     ~ServerProcess()
     {
@@ -175,12 +178,9 @@ const vector<vector<string>> recv_msgs2 {
 #include <stdio.h>
 #include <stdlib.h>
 
-string host,
-    port1, port2;
-
 TEST(nogo, server)
 {
-    ServerProcess process { stoi(port1), stoi(port2) };
+    ServerProcess process {};
 
     std::this_thread::sleep_for(3s);
 
@@ -235,19 +235,10 @@ TEST(nogo, server)
             }
         }
     }
-    // c2.write(sendmsg[6]);
-    // c2.close();
+    // TODO: Send LEAVE_OP
 }
 int main(int argc, char* argv[])
 {
-    if (argc < 4) {
-        std::cerr << "Usage: " << argv[0] << " <host> <local_port> <remote_port>\n";
-        return 1;
-    }
-    host = argv[1];
-    port1 = argv[2];
-    port2 = argv[3];
-
     testing::InitGoogleTest();
     return RUN_ALL_TESTS();
 }
