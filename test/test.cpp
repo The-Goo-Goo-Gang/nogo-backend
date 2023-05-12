@@ -36,19 +36,6 @@ using asio::ip::tcp;
 #include <gtest/gtest.h>
 #include <range/v3/all.hpp>
 
-auto split(string_view str, string_view delim)
-{
-    vector<string> result;
-    auto pos = str.find(delim);
-    while (pos != string::npos) {
-        result.push_back(string { str.substr(0, pos) });
-        str.remove_prefix(pos + delim.size());
-        pos = str.find(delim);
-    }
-    result.push_back(string { str });
-    return result;
-}
-
 template <typename T>
 constexpr auto stoi_base(string_view str)
 {
@@ -245,7 +232,7 @@ TEST(nogo, server)
         constexpr string_view placeholder = "{TIMEOUT}";
         constexpr auto timestamp_len = 13;
         for (auto [msg, expect] : ranges::views::zip(recv_msg1, recv_msgs1[i])) {
-            auto expect_s = split(expect, placeholder);
+            auto expect_s = expect | ranges::views::split(placeholder) | ranges::to<vector<string>>();
             auto expect_msg_length = expect.size() - (expect_s.size() - 1) * placeholder.size() + (expect_s.size() - 1) * timestamp_len;
             bool match = msg.size() == expect_msg_length;
             if (match) {
@@ -266,7 +253,7 @@ TEST(nogo, server)
             EXPECT_TRUE(match) << "message not match in round " << i + 1 << "!\nreceived message: " << msg << "\nexpected message: " << expect;
         }
         for (auto [msg, expect] : ranges::views::zip(recv_msg2, recv_msgs2[i])) {
-            auto expect_s = split(expect, placeholder);
+            auto expect_s = expect | ranges::views::split(placeholder) | ranges::to<vector<string>>();
             auto expect_msg_length = expect.size() - (expect_s.size() - 1) * placeholder.size() + (expect_s.size() - 1) * timestamp_len;
             bool match = msg.size() == expect_msg_length;
             if (match) {
