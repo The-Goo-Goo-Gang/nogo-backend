@@ -140,7 +140,7 @@ _EXPORT struct UiMessage : public Message {
         NLOHMANN_DEFINE_TYPE_INTRUSIVE(UiState, is_gaming, status, game, game_result)
     };
     UiMessage(const Contest& contest)
-        : Message(OpCode::UPDATE_UI_STATE_OP, std::to_string(std::time(0)), UiState(contest).to_string())
+        : Message(OpCode::UPDATE_UI_STATE_OP, std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count()), UiState(contest).to_string())
     {
     }
 };

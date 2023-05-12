@@ -142,6 +142,7 @@ class Room {
             player2 { request.receiver, request.receiver->get_name(), -request.role, request.receiver->is_local ? PlayerType::LOCAL_HUMAN_PLAYER : PlayerType::REMOTE_HUMAN_PLAYER };
         contest.enroll(std::move(player1)), contest.enroll(std::move(player2));
         contest.local_role = request.sender->is_local ? request.role : -request.role;
+        contest.duration = TIMEOUT;
     }
 
     void reject_all_received_requests()

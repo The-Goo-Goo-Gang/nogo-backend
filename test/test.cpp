@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <charconv>
 #include <deque>
 #include <iostream>
@@ -137,7 +138,8 @@ auto launch_client(asio::io_context& io_context, string_view ip, string_view por
 }
 
 const vector<vector<string>> send_msgs1 {
-    { R"({"op":200000,"data1":"player1","data2":"b"})" },
+    { R"({"op":100011,"data1":"Player1","data2":""})" },
+    { R"({"op":100015,"data1":"","data2":""})" },
 
     { R"({"op":200002,"data1":"A1","data2":"1683446065123"})" },
     { R"({"op":200002,"data1":"B2","data2":"1683446067123"})" },
@@ -145,7 +147,8 @@ const vector<vector<string>> send_msgs1 {
     {},
 };
 const vector<vector<string>> send_msgs2 {
-    { R"({"op":200000,"data1":"player2","data2":""})" },
+    { R"({"op":200000,"data1":"Player2","data2":"w"})" },
+    {},
 
     { R"({"op":200002,"data1":"A2","data2":"1683446066123"})" },
     { R"({"op":200002,"data1":"B1","data2":"1683446068123"})" },
@@ -154,22 +157,27 @@ const vector<vector<string>> send_msgs2 {
 };
 
 const vector<vector<string>> recv_msgs1 {
+    {},
+    { R"({"data1":"Player2","data2":"w","op":100014})",
+        R"({"data1":"{TIMEOUT}","data2":"{\"game\":null,\"game_result\":{\"win_type\":0,\"winner\":0},\"is_gaming\":false,\"status\":0}","op":100001})" },
     { R"({"data1":"{TIMEOUT}","data2":"{\"game\":null,\"game_result\":{\"win_type\":0,\"winner\":0},\"is_gaming\":false,\"status\":0}","op":100001})" },
-    { R"({"data1":"player2","data2":"","op":200000})",
-        R"({"data1":"{TIMEOUT}","data2":"{\"game\":{\"chessboard\":[[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0]],\"disabled_positions\":[],\"last_move\":null,\"metadata\":{\"player_opposing\":{\"avatar\":\"\",\"chess_type\":-1,\"name\":\"player2\",\"type\":0},\"player_our\":{\"avatar\":\"\",\"chess_type\":1,\"name\":\"player1\",\"type\":0},\"size\":9,\"turn_timeout\":1918967901},\"move_count\":0,\"now_playing\":1,\"statistics\":[]},\"game_result\":{\"win_type\":0,\"winner\":0},\"is_gaming\":true,\"status\":1}","op":100001})" },
+    { R"({"data1":"{TIMEOUT}","data2":"{\"game\":{\"chessboard\":[[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0]],\"disabled_positions\":[],\"end_time\":0,\"last_move\":null,\"metadata\":{\"player_opposing\":{\"avatar\":\"\",\"chess_type\":-1,\"name\":\"Player2\",\"type\":0},\"player_our\":{\"avatar\":\"\",\"chess_type\":1,\"name\":\"Player1\",\"type\":0},\"size\":9,\"turn_timeout\":30},\"move_count\":0,\"now_playing\":1,\"start_time\":{TIMEOUT},\"statistics\":[]},\"game_result\":{\"win_type\":0,\"winner\":0},\"is_gaming\":true,\"status\":1}","op":100001})" },
 
-    { R"({"data1":"{TIMEOUT}","data2":"{\"game\":{\"chessboard\":[[1,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0]],\"disabled_positions\":[],\"last_move\":{\"x\":0,\"y\":0},\"metadata\":{\"player_opposing\":{\"avatar\":\"\",\"chess_type\":-1,\"name\":\"player2\",\"type\":0},\"player_our\":{\"avatar\":\"\",\"chess_type\":1,\"name\":\"player1\",\"type\":0},\"size\":9,\"turn_timeout\":30},\"move_count\":1,\"now_playing\":-1,\"statistics\":[]},\"game_result\":{\"win_type\":0,\"winner\":0},\"is_gaming\":true,\"status\":1}","op":100001})" },
+    { R"({"data1":"{TIMEOUT}","data2":"{\"game\":{\"chessboard\":[[1,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0]],\"disabled_positions\":[],\"end_time\":0,\"last_move\":{\"x\":0,\"y\":0},\"metadata\":{\"player_opposing\":{\"avatar\":\"\",\"chess_type\":-1,\"name\":\"Player2\",\"type\":0},\"player_our\":{\"avatar\":\"\",\"chess_type\":1,\"name\":\"Player1\",\"type\":0},\"size\":9,\"turn_timeout\":30},\"move_count\":1,\"now_playing\":-1,\"start_time\":{TIMEOUT},\"statistics\":[]},\"game_result\":{\"win_type\":0,\"winner\":0},\"is_gaming\":true,\"status\":1}","op":100001})" },
     { R"({"data1":"A2","data2":"1683446066123","op":200002})",
-        R"({"data1":"{TIMEOUT}","data2":"{\"game\":{\"chessboard\":[[1,-1,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0]],\"disabled_positions\":[],\"last_move\":{\"x\":0,\"y\":1},\"metadata\":{\"player_opposing\":{\"avatar\":\"\",\"chess_type\":-1,\"name\":\"player2\",\"type\":0},\"player_our\":{\"avatar\":\"\",\"chess_type\":1,\"name\":\"player1\",\"type\":0},\"size\":9,\"turn_timeout\":30},\"move_count\":2,\"now_playing\":1,\"statistics\":[]},\"game_result\":{\"win_type\":0,\"winner\":0},\"is_gaming\":true,\"status\":1}","op":100001})" },
-    { R"({"data1":"{TIMEOUT}","data2":"{\"game\":{\"chessboard\":[[1,-1,0,0,0,0,0,0,0],[0,1,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0]],\"disabled_positions\":[{\"x\":1,\"y\":0}],\"last_move\":{\"x\":1,\"y\":1},\"metadata\":{\"player_opposing\":{\"avatar\":\"\",\"chess_type\":-1,\"name\":\"player2\",\"type\":0},\"player_our\":{\"avatar\":\"\",\"chess_type\":1,\"name\":\"player1\",\"type\":0},\"size\":9,\"turn_timeout\":30},\"move_count\":3,\"now_playing\":-1,\"statistics\":[]},\"game_result\":{\"win_type\":0,\"winner\":0},\"is_gaming\":true,\"status\":1}","op":100001})" },
+        R"({"data1":"{TIMEOUT}","data2":"{\"game\":{\"chessboard\":[[1,-1,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0]],\"disabled_positions\":[],\"end_time\":0,\"last_move\":{\"x\":0,\"y\":1},\"metadata\":{\"player_opposing\":{\"avatar\":\"\",\"chess_type\":-1,\"name\":\"Player2\",\"type\":0},\"player_our\":{\"avatar\":\"\",\"chess_type\":1,\"name\":\"Player1\",\"type\":0},\"size\":9,\"turn_timeout\":30},\"move_count\":2,\"now_playing\":1,\"start_time\":{TIMEOUT},\"statistics\":[]},\"game_result\":{\"win_type\":0,\"winner\":0},\"is_gaming\":true,\"status\":1}","op":100001})" },
+    { R"({"data1":"{TIMEOUT}","data2":"{\"game\":{\"chessboard\":[[1,-1,0,0,0,0,0,0,0],[0,1,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0]],\"disabled_positions\":[{\"x\":1,\"y\":0}],\"end_time\":0,\"last_move\":{\"x\":1,\"y\":1},\"metadata\":{\"player_opposing\":{\"avatar\":\"\",\"chess_type\":-1,\"name\":\"Player2\",\"type\":0},\"player_our\":{\"avatar\":\"\",\"chess_type\":1,\"name\":\"Player1\",\"type\":0},\"size\":9,\"turn_timeout\":30},\"move_count\":3,\"now_playing\":-1,\"start_time\":{TIMEOUT},\"statistics\":[]},\"game_result\":{\"win_type\":0,\"winner\":0},\"is_gaming\":true,\"status\":1}","op":100001})" },
     { R"({"data1":"B1","data2":"1683446068123","op":200002})",
-        R"({"data1":"{TIMEOUT}","data2":"{\"game\":{\"chessboard\":[[1,-1,0,0,0,0,0,0,0],[-1,1,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0]],\"disabled_positions\":[{\"x\":0,\"y\":2},{\"x\":2,\"y\":0}],\"last_move\":{\"x\":1,\"y\":0},\"metadata\":{\"player_opposing\":{\"avatar\":\"\",\"chess_type\":-1,\"name\":\"player2\",\"type\":0},\"player_our\":{\"avatar\":\"\",\"chess_type\":1,\"name\":\"player1\",\"type\":0},\"size\":9,\"turn_timeout\":30},\"move_count\":4,\"now_playing\":1,\"statistics\":[]},\"game_result\":{\"win_type\":2,\"winner\":1},\"is_gaming\":false,\"status\":2}","op":100001})" },
+        R"({"data1":"2","data2":"","op":100006})",
+        R"({"data1":"{TIMEOUT}","data2":"{\"game\":{\"chessboard\":[[1,-1,0,0,0,0,0,0,0],[-1,1,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0]],\"disabled_positions\":[{\"x\":0,\"y\":2},{\"x\":2,\"y\":0}],\"end_time\":{TIMEOUT},\"last_move\":{\"x\":1,\"y\":0},\"metadata\":{\"player_opposing\":{\"avatar\":\"\",\"chess_type\":-1,\"name\":\"Player2\",\"type\":0},\"player_our\":{\"avatar\":\"\",\"chess_type\":1,\"name\":\"Player1\",\"type\":0},\"size\":9,\"turn_timeout\":30},\"move_count\":4,\"now_playing\":1,\"start_time\":{TIMEOUT},\"statistics\":[]},\"game_result\":{\"win_type\":2,\"winner\":1},\"is_gaming\":false,\"status\":2}","op":100001})" },
 
     {},
-    { R"({"data1":"","data2":"","op":200005})" },
+    { R"({"data1":"{TIMEOUT}","data2":"{\"game\":{\"chessboard\":[[1,-1,0,0,0,0,0,0,0],[-1,1,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0]],\"disabled_positions\":[{\"x\":0,\"y\":2},{\"x\":2,\"y\":0}],\"end_time\":{TIMEOUT},\"last_move\":{\"x\":1,\"y\":0},\"metadata\":{\"player_opposing\":{\"avatar\":\"\",\"chess_type\":-1,\"name\":\"Player2\",\"type\":0},\"player_our\":{\"avatar\":\"\",\"chess_type\":1,\"name\":\"Player1\",\"type\":0},\"size\":9,\"turn_timeout\":30},\"move_count\":4,\"now_playing\":1,\"start_time\":{TIMEOUT},\"statistics\":[]},\"game_result\":{\"win_type\":2,\"winner\":1},\"is_gaming\":false,\"status\":2}","op":100001})" },
 };
 const vector<vector<string>> recv_msgs2 {
-    { R"({"data1":"player1","data2":"b","op":200000})" },
+    {},
+    {},
+    { R"({"data1":"Player1","data2":"b","op":200000})" },
     {},
 
     { R"({"data1":"A1","data2":"1683446065123","op":200002})" },
@@ -222,24 +230,48 @@ TEST(nogo, server)
         // fmt::print("\033[32mrecv_msg2: {}\033[0m\n", recv_msg2);
 
         constexpr string_view placeholder = "{TIMEOUT}";
-        constexpr auto timestamp_len = 10;
+        constexpr auto timestamp_len = 13;
         for (auto [msg, expect] : ranges::views::zip(recv_msg1, recv_msgs1[i])) {
-            auto pos = expect.find(placeholder);
-            if (pos == string::npos) {
-                EXPECT_EQ(msg, expect);
-            } else {
-                EXPECT_EQ(msg.substr(0, pos), expect.substr(0, pos));
-                EXPECT_EQ(msg.substr(pos + timestamp_len), expect.substr(pos + placeholder.size()));
+            auto expect_s = expect | ranges::views::split(placeholder) | ranges::to<vector<string>>();
+            auto expect_msg_length = expect.size() - (expect_s.size() - 1) * placeholder.size() + (expect_s.size() - 1) * timestamp_len;
+            bool match = msg.size() == expect_msg_length;
+            if (match) {
+                if (expect_s.size() == 1) {
+                    match = msg == expect;
+                } else {
+                    auto msg_s = expect_s | ranges::views::transform([&](auto& s) {
+                        auto pos = expect.find(s);
+                        auto index = std::find(expect_s.begin(), expect_s.end(), s) - expect_s.begin();
+                        if (pos == 0)
+                            return msg.substr(0, s.size());
+                        auto actual_pos = pos + (timestamp_len - placeholder.size()) * index;
+                        return msg.substr(actual_pos, s.size());
+                    }) | ranges::to<vector<string>>();
+                    match = ranges::equal(msg_s, expect_s);
+                }
             }
+            EXPECT_TRUE(match) << "message not match in round " << i + 1 << "!\nreceived message: " << msg << "\nexpected message: " << expect;
         }
         for (auto [msg, expect] : ranges::views::zip(recv_msg2, recv_msgs2[i])) {
-            auto pos = expect.find(placeholder);
-            if (pos == string::npos) {
-                EXPECT_EQ(msg, expect);
-            } else {
-                EXPECT_EQ(msg.substr(0, pos), expect.substr(0, pos));
-                EXPECT_EQ(msg.substr(pos + timestamp_len), expect.substr(pos + placeholder.size()));
+            auto expect_s = expect | ranges::views::split(placeholder) | ranges::to<vector<string>>();
+            auto expect_msg_length = expect.size() - (expect_s.size() - 1) * placeholder.size() + (expect_s.size() - 1) * timestamp_len;
+            bool match = msg.size() == expect_msg_length;
+            if (match) {
+                if (expect_s.size() == 1) {
+                    match = msg == expect;
+                } else {
+                    auto msg_s = expect_s | ranges::views::transform([&](auto& s) {
+                        auto pos = expect.find(s);
+                        auto index = std::find(expect_s.begin(), expect_s.end(), s) - expect_s.begin();
+                        if (pos == 0)
+                            return msg.substr(0, s.size());
+                        auto actual_pos = pos + (timestamp_len - placeholder.size()) * index;
+                        return msg.substr(actual_pos, s.size());
+                    }) | ranges::to<vector<string>>();
+                    match = ranges::equal(msg_s, expect_s);
+                }
             }
+            EXPECT_TRUE(match) << "message not match in round " << i + 1 << "!\nreceived message: " << msg << "\nexpected message: " << expect;
         }
     }
     // TODO: Send LEAVE_OP
