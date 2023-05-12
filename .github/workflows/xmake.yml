@@ -20,7 +20,7 @@ jobs:
           xmake-version: latest
       - name: Build
         run: |
-          xmake f -p mingw --ldflags="-lws2_32 -lwsock32" -y
+          xmake f -p mingw --ldflags="-LC:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64\lib -lws2_32 -lwsock32 -static" -y
           xmake
       - name: Upload artifact
         uses: actions/upload-artifact@v3
