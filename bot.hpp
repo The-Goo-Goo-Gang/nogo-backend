@@ -1,5 +1,7 @@
 #pragma once
-#define export
+#ifndef _EXPORT
+#define _EXPORT
+#endif 
 
 #include <chrono>
 #include <cmath>
@@ -109,13 +111,13 @@ struct MCTSNode : std::enable_shared_from_this<MCTSNode> {
     }
 };
 
-export Position random_bot_player(const State& state)
+_EXPORT Position random_bot_player(const State& state)
 {
     auto actions = state.available_actions();
     return actions[rand() % actions.size()];
 }
 
-export constexpr auto mcts_bot_player_generator(double C)
+_EXPORT constexpr auto mcts_bot_player_generator(double C)
 {
     return [=](const State& state) {
         auto start = chrono::high_resolution_clock::now();
@@ -129,4 +131,4 @@ export constexpr auto mcts_bot_player_generator(double C)
     };
 }
 
-export constexpr auto mcts_bot_player = mcts_bot_player_generator(0.1);
+_EXPORT constexpr auto mcts_bot_player = mcts_bot_player_generator(0.1);

@@ -1,11 +1,15 @@
 #pragma once
-#define export
+#ifndef _EXPORT
+#define _EXPORT
+#endif
 
 #include <algorithm>
 #include <array>
+#include <charconv>
 #include <iostream>
 #include <ranges>
 #include <vector>
+#include <nlohmann/json.hpp>
 
 #ifdef __GNUC__
 #include <range/v3/all.hpp>
@@ -13,9 +17,26 @@
 namespace ranges = std::ranges;
 #endif
 
-export constexpr inline auto rank_n = 9;
+template <typename T>
+constexpr auto stoi_base(std::string_view str)
+{
+    T result;
+    auto [p, ec] = std::from_chars(str.data(), str.data() + str.size(), result);
+    switch (ec) {
+    case std::errc::invalid_argument:
+        throw std::invalid_argument { "no conversion" };
+    case std::errc::result_out_of_range:
+        throw std::out_of_range { "out of range" };
+    default:
+        return result;
+    };
+}
+constexpr auto stoi = stoi_base<int>;
+constexpr auto stoull = stoi_base<unsigned long long>;
 
-export struct Position {
+_EXPORT constexpr inline auto rank_n = 9;
+
+_EXPORT struct Position {
     int x { -1 }, y { -1 };
     constexpr Position(int x, int y)
         : x(x)
@@ -28,14 +49,20 @@ export struct Position {
         return { x + p.x, y + p.y };
     }
     constexpr explicit operator bool() const { return x >= 0 && y >= 0; }
-    // constexpr auto operator<=>(const Position& p) const = default;
-    friend auto operator<<(std::ostream& os, Position p) -> std::ostream&
+    constexpr auto operator<=>(const Position& p) const = default;
+    auto to_string() const -> std::string
     {
-        return os << '(' << p.x << ", " << p.y << ')';
+        return std::string(1, 'A' + x) + std::to_string(y + 1);
     }
+    constexpr explicit Position(std::string_view str)
+        : Position(str[0] - 'A', stoi(str.substr(1)) - 1)
+    {
+    }
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Position, x, y)
 };
 
-export struct Role {
+_EXPORT struct Role {
     int id;
     static const Role BLACK, WHITE, NONE;
 
@@ -44,19 +71,29 @@ export struct Role {
     {
     }
 
-    constexpr decltype(auto) map(auto&& v_black, auto&& v_white) const
-    {
-        return id == 1 ? v_black : id == -1 ? v_white
-                                            : throw std::runtime_error("invalid role");
-    }
     constexpr decltype(auto) map(auto&& v_black, auto&& v_white, auto&& v_none) const
     {
-        return id == 1 ? v_black : id == -1 ? v_white
-                                            : v_none;
+        return id == 1 ? v_black
+            : id == -1 ? v_white
+                       : v_none;
     }
     constexpr auto operator<=>(const Role&) const = default;
     constexpr auto operator-() const { return Role(-id); }
     constexpr explicit operator bool() { return id; }
+
+    auto to_string() const -> std::string
+    {
+        return map("BLACK", "WHITE", "NONE");
+    }
+
+    explicit constexpr Role(std::string_view str)
+        : Role(str == "b"    ? 1
+                : str == "w" ? -1
+                             : 0)
+    {
+    }
+
+    explicit constexpr operator int() const { return id; }
 
 private:
     constexpr explicit Role(int id)
@@ -66,7 +103,7 @@ private:
 };
 constexpr Role Role::BLACK { 1 }, Role::WHITE { -1 }, Role::NONE { 0 };
 
-export class Board {
+_EXPORT class Board {
     std::array<Role, rank_n * rank_n> arr;
 
     static constexpr std::array delta { Position { -1, 0 }, Position { 1, 0 }, Position { 0, -1 }, Position { 0, 1 } };
@@ -146,7 +183,7 @@ public:
     }
 };
 
-export struct State {
+_EXPORT struct State {
     Board board;
     Role role;
     Position last_move;

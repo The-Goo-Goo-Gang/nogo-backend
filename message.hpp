@@ -1,5 +1,7 @@
 #pragma once
-#define export
+#ifndef _EXPORT
+#define _EXPORT
+#endif
 
 #include <nlohmann/json.hpp>
 #include <string_view>
@@ -8,7 +10,7 @@ using nlohmann::json;
 using std::string;
 using std::string_view;
 
-export enum class OpCode : int {
+_EXPORT enum class OpCode : int {
     READY_OP = 200000,
     REJECT_OP,
     MOVE_OP,
@@ -18,20 +20,38 @@ export enum class OpCode : int {
     GIVEUP_END_OP,
     LEAVE_OP,
     CHAT_OP,
-    //-----Extend OpCode ------------
+    // -------- Extend OpCode --------
     START_LOCAL_GAME_OP = 100000,
     UPDATE_UI_STATE_OP,
-    // TODO: Only for temporary use, need to be removed in stage 2
-    LOCAL_GAME_TIMEOUT_OP
+    // Deprecated
+    LOCAL_GAME_TIMEOUT_OP,
+    LOCAL_GAME_MOVE_OP,
+    CONNECT_TO_REMOTE_OP,
+    CONNECT_RESULT_OP,
+    WIN_PENDING_OP,
+    // -------- Chat --------
+    CHAT_SEND_MESSAGE_OP,
+    CHAT_SEND_BROADCAST_MESSAGE_OP,
+    CHAT_RECEIVE_MESSAGE_OP,
+    CHAT_USERNAME_UPDATE_OP,
+    // -------- Contest Request --------
+    UPDATE_USERNAME_OP,
+    SEND_REQUEST_OP,
+    SEND_REQUEST_BY_USERNAME_OP,
+    RECEIVE_REQUEST_OP,
+    ACCEPT_REQUEST_OP,
+    REJECT_REQUEST_OP,
+    RECEIVE_REQUEST_RESULT_OP,
+    // -------- Extend OpCode End --------
 };
 
-export enum class PlayerType {
+_EXPORT enum class PlayerType {
     LOCAL_HUMAN_PLAYER,
     REMOTE_HUMAN_PLAYER,
     BOT_PLAYER,
 };
 
-export struct Message {
+_EXPORT struct Message {
     OpCode op;
     string data1, data2;
 
