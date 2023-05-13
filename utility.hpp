@@ -9,6 +9,7 @@ auto join_with = join;
 #define _EXPORT
 #endif
 
+#include <charconv>
 template <typename T>
 constexpr inline auto integer_cast(std::string_view str)
 {
