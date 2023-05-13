@@ -20,6 +20,7 @@
 #include <asio/redirect_error.hpp>
 #include <asio/signal_set.hpp>
 #include <asio/steady_timer.hpp>
+#include <asio/streambuf.hpp>
 #include <asio/use_awaitable.hpp>
 #include <asio/write.hpp>
 
@@ -742,15 +743,14 @@ private:
 
     awaitable<void> reader()
     {
+        asio::streambuf buffer;
+        std::istream stream(&buffer);
         try {
-            for (std::string read_msg;;) {
-                std::size_t n = co_await asio::async_read_until(socket_, asio::dynamic_buffer(read_msg, 1024), "\n", use_awaitable);
-                string temp = read_msg.substr(0, n);
-                logger->info("Receive Message{}", temp);
-                Message msg { read_msg.substr(0, n) };
-                room_.process_data(msg, shared_from_this());
-
-                read_msg.erase(0, n);
+            for (std::string message;;) {
+                co_await asio::async_read_until(socket_, buffer, '\n', use_awaitable);
+                std::getline(stream, message);
+                logger->info("Receive Message{}", message);
+                room_.process_data(Message { message }, shared_from_this());
             }
         } catch (std::exception& e) {
             logger->error("Exception: {}", e.what());
