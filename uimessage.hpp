@@ -1,18 +1,18 @@
 #pragma once
-#ifndef _EXPORT
-#define _EXPORT
-#endif 
 
+#include <algorithm>
 #include <array>
-#include <ctime>
+#include <chrono>
 #include <nlohmann/json.hpp>
 #include <optional>
+#include <ranges>
 #include <string_view>
 #include <vector>
 
 #include "contest.hpp"
 #include "message.hpp"
 #include "rule.hpp"
+#include "utility.hpp"
 
 using nlohmann::json;
 using std::string;
@@ -76,28 +76,41 @@ _EXPORT struct UiMessage : public Message {
         GameResult(const Contest& contest)
             : winner(contest.result.winner.id)
             , win_type(contest.result.win_type)
-            {
-            }
+        {
+        }
         NLOHMANN_DEFINE_TYPE_INTRUSIVE(GameResult, winner, win_type)
     };
     struct Game {
         std::array<std::array<int, rank_n>, rank_n> chessboard;
         int now_playing;
         int move_count;
+        long long start_time;
+        long long end_time;
+        std::optional<Position> last_move;
+        std::vector<Position> disabled_positions;
         GameMetadata metadata;
         std::vector<DynamicStatistics> statistics;
         Game() = default;
         Game(const Contest& contest)
             : now_playing(contest.current.role.id)
-            , move_count(contest.moves.size())
+            , move_count(contest.round())
             , metadata(GameMetadata(contest))
+            , last_move(contest.moves.empty() ? std::nullopt : std::optional<Position>(contest.moves.back()))
+            , start_time { std::chrono::duration_cast<std::chrono::milliseconds>(contest.start_time.time_since_epoch()).count() }
+            , end_time { contest.status == Contest::Status::GAME_OVER ? std::chrono::duration_cast<std::chrono::milliseconds>(contest.end_time.time_since_epoch()).count() : 0 }
         {
+            auto actions = contest.current.available_actions();
+            auto index = Board::index();
+            disabled_positions = index
+                | ranges::views::filter([&](auto pos) { return !contest.current.board[pos] && std::find(actions.begin(), actions.end(), pos) == actions.end(); })
+                | ranges::to<std::vector>();
             const auto board = contest.current.board.to_2darray();
             for (int i = 0; i < rank_n; ++i)
                 for (int j = 0; j < rank_n; ++j)
                     chessboard[i][j] = board[i][j].id;
         }
-        NLOHMANN_DEFINE_TYPE_INTRUSIVE(Game, chessboard, now_playing, move_count, metadata, statistics)
+
+        NLOHMANN_DEFINE_TYPE_INTRUSIVE(Game, chessboard, now_playing, move_count, metadata, statistics, disabled_positions, last_move, start_time, end_time)
     };
     struct UiState {
         bool is_gaming;
@@ -118,7 +131,7 @@ _EXPORT struct UiMessage : public Message {
         NLOHMANN_DEFINE_TYPE_INTRUSIVE(UiState, is_gaming, status, game, game_result)
     };
     UiMessage(const Contest& contest)
-        : Message(OpCode::UPDATE_UI_STATE_OP, std::to_string(std::time(0)), UiState(contest).to_string())
+        : Message(OpCode::UPDATE_UI_STATE_OP, std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count()), UiState(contest).to_string())
     {
     }
 };

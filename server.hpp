@@ -9,9 +9,6 @@
 //
 
 #pragma once
-#ifndef _EXPORT
-#define _EXPORT
-#endif
 
 #include <asio/awaitable.hpp>
 #include <asio/co_spawn.hpp>
@@ -26,10 +23,15 @@
 #include <asio/use_awaitable.hpp>
 #include <asio/write.hpp>
 
+#include <algorithm>
 #include <chrono>
 #include <deque>
 #include <iostream>
+#include <optional>
+#include <queue>
+#include <ranges>
 #include <set>
+#include <stdexcept>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -38,6 +40,7 @@
 #include "log.hpp"
 #include "message.hpp"
 #include "uimessage.hpp"
+#include "utility.hpp"
 
 using asio::awaitable;
 using asio::co_spawn;
@@ -57,16 +60,37 @@ class Room;
 
 void start_session(asio::io_context&, Room&, asio::error_code&, std::string_view, std::string_view);
 
+struct ContestRequest {
+    Participant_ptr sender;
+    Participant_ptr receiver;
+    Role role;
+    system_clock::time_point time;
+
+    ContestRequest(Participant_ptr sender, Participant_ptr receiver, Role role, system_clock::time_point time = system_clock::now())
+        : sender { sender }
+        , receiver { receiver }
+        , role { role }
+        , time { time }
+    {
+    }
+};
+
 class Room {
     Contest contest;
     std::deque<std::string> chats;
+    std::optional<ContestRequest> my_request;
+    std::queue<ContestRequest> received_requests;
+
+    Participant_ptr find_local_participant()
+    {
+        if (auto p = ranges::find_if(participants_, [](auto participant) { return participant->is_local; }); p != participants_.end())
+            return *p;
+        throw std::logic_error("no local participant");
+    }
 
     void deliver_to_local(Message msg)
     {
-        for (auto participant : participants_) {
-            if (participant->is_local)
-                participant->deliver(msg);
-        }
+        find_local_participant()->deliver(msg);
     }
 
     void deliver_ui_state()
@@ -74,16 +98,81 @@ class Room {
         deliver_to_local(UiMessage { contest });
     }
 
+    auto receive_participant_name(Participant_ptr participant, std::string_view name)
+    {
+
+        auto new_name { name };
+
+        if (!Player::is_valid_name(new_name)) {
+            if (participant->get_name().empty())
+                new_name = "Player" + std::to_string(contest.players.size() + 1);
+            else
+                new_name = participant->get_name();
+        }
+
+        if (new_name != participant->get_name()) {
+            if (!participant->is_local && !participant->get_name().empty() && new_name != participant->get_name())
+                deliver_to_local({ OpCode::CHAT_USERNAME_UPDATE_OP, participant->get_name(), new_name });
+            participant->set_name(new_name);
+        }
+
+        return new_name;
+    }
+
+    void receive_new_request(const ContestRequest& request)
+    {
+        if (received_requests.empty()) {
+            deliver_to_local({ OpCode::RECEIVE_REQUEST_OP, request.sender->get_name(), request.role.map("b", "w", "") });
+        }
+        received_requests.push(request);
+        deliver_ui_state();
+    }
+
+    void enroll_players(ContestRequest& request)
+    {
+        Player player1 { request.sender, request.sender->get_name(), request.role, request.sender->is_local ? PlayerType::LOCAL_HUMAN_PLAYER : PlayerType::REMOTE_HUMAN_PLAYER },
+            player2 { request.receiver, request.receiver->get_name(), -request.role, request.receiver->is_local ? PlayerType::LOCAL_HUMAN_PLAYER : PlayerType::REMOTE_HUMAN_PLAYER };
+        contest.enroll(std::move(player1)), contest.enroll(std::move(player2));
+        contest.local_role = request.sender->is_local ? request.role : -request.role;
+        contest.duration = TIMEOUT;
+    }
+
+    void reject_all_received_requests()
+    {
+        while (!received_requests.empty()) {
+            auto r = received_requests.front();
+            received_requests.pop();
+            r.sender->deliver({ OpCode::REJECT_OP, r.receiver->get_name() });
+        }
+    }
+
+    void check_online_contest_result()
+    {
+        if (contest.status == Contest::Status::GAME_OVER) {
+            auto winner { contest.players.at(contest.result.winner) };
+            auto loser { contest.players.at(-winner.role) };
+
+            auto gg_op {
+                contest.result.win_type == Contest::WinType::GIVEUP        ? OpCode::GIVEUP_END_OP
+                    : contest.result.win_type == Contest::WinType::TIMEOUT ? OpCode::TIMEOUT_END_OP
+                                                                           : OpCode::SUICIDE_END_OP
+            };
+            if (winner.participant->is_local) {
+                winner.participant->deliver({ OpCode::WIN_PENDING_OP, std::to_string(std::to_underlying(contest.result.win_type)) });
+                loser.participant->deliver({ gg_op });
+            } else {
+                // do nothing, waiting for GG_OP to confirm
+            }
+        }
+    }
+
 public:
     Room(asio::io_context& io_context)
         : timer_ { io_context }
         , io_context_ { io_context }
+        , my_request { std::nullopt }
     {
     }
-    /*
-    建立连接成功时，客户端是请求对局方，也就是服务端在收到客户端任何通信前不与客户端进行交流。
-    对局结束后，或暂时拒绝后，想再来一局（重发）的是请求对局方。另外，如果已经收到对方想再来一局了，程序应该阻止本方重复发送请求，而引导先接受或拒绝。你可以不处理因信息传输导致的同时发送，你可以假设不存在这种情况。
-    */
     void process_data(Message msg, Participant_ptr participant)
     {
         logger->info("process_data: {} from {}", msg.to_string(), participant->to_string());
@@ -120,7 +209,7 @@ public:
             // int timeout = std::stoi(msg.data1);
             // int rank_n = std::stoi(msg.data2);
 
-            seconds duration { std::stoi(msg.data1) };
+            seconds duration { stoi(data1) };
             contest.duration = duration;
 
             Player player1 { participant, "BLACK", Role::BLACK, PlayerType::LOCAL_HUMAN_PLAYER },
@@ -184,6 +273,80 @@ public:
             deliver_ui_state();
             break;
         }
+
+        case OpCode::UPDATE_USERNAME_OP: {
+            if (!participant->is_local) {
+                throw std::logic_error { "remote participant should not send UPDATE_USERNAME_OP" };
+            }
+            receive_participant_name(participant, data1);
+            break;
+        }
+
+        case OpCode::SEND_REQUEST_OP: {
+            // data1 is host:port, data2 is role
+            auto host { data1.substr(0, data1.find(':')) };
+            auto port { data1.substr(data1.find(':') + 1) };
+            auto ep = tcp::endpoint { asio::ip::make_address(host), integer_cast<asio::ip::port_type>(port) };
+            Role role { data2 };
+
+            auto participants = participants_ | std::views::filter([ep](auto p) { return p->endpoint() == ep; })
+                | ranges::to<std::vector>();
+
+            if (participants.size() != 1) {
+                throw std::logic_error { "participants.size() != 1" };
+            }
+
+            auto receiver { participants[0] };
+            ContestRequest request { participant, receiver, role };
+            my_request = request;
+            receiver->deliver({ OpCode::READY_OP, participant->get_name(), data2 });
+            break;
+        }
+        case OpCode::SEND_REQUEST_BY_USERNAME_OP: {
+            // data1 is username, data2 is role
+            auto participants = participants_ | std::views::filter([data1](auto p) { return p->get_name() == data1; })
+                | ranges::to<std::vector>();
+
+            if (participants.size() != 1) {
+                throw std::logic_error { "participants.size() != 1" };
+            }
+
+            auto receiver { participants[0] };
+            ContestRequest request { participant, receiver, Role { data2 } };
+            my_request = request;
+            receiver->deliver({ OpCode::READY_OP, participant->get_name(), data2 });
+            break;
+        }
+        case OpCode::RECEIVE_REQUEST_OP: {
+            // should not be sent by client
+            break;
+        }
+        case OpCode::ACCEPT_REQUEST_OP: {
+            if (received_requests.empty()) {
+                throw std::logic_error { "received_requests.empty()" };
+            }
+            auto request = received_requests.front();
+            received_requests.pop();
+            reject_all_received_requests();
+            request.sender->deliver({ OpCode::READY_OP, request.receiver->get_name(), (-request.role).map("b", "w", "") });
+            enroll_players(request);
+            deliver_ui_state();
+            break;
+        }
+        case OpCode::REJECT_REQUEST_OP: {
+            if (received_requests.empty()) {
+                throw std::logic_error { "received_requests.empty()" };
+            }
+            auto request = received_requests.front();
+            received_requests.pop();
+            request.sender->deliver({ OpCode::REJECT_OP, request.receiver->get_name() });
+            if (!received_requests.empty()) {
+                auto next_request = received_requests.front();
+                next_request.receiver->deliver({ OpCode::RECEIVE_REQUEST_OP, next_request.sender->get_name(), next_request.role.map("b", "w", "") });
+            }
+            break;
+        }
+
         case OpCode::READY_OP: {
             logger->info("ready: is_local = {}, data1 = {}, data2 = {}", participant->is_local, data1, data2);
 
@@ -191,7 +354,7 @@ public:
                 contest.clear();
             }
 
-            auto name { data1 };
+            auto name { receive_participant_name(participant, data1) };
             Role role { data2 };
 
             if (!Player::is_valid_name(name)) {
@@ -205,7 +368,6 @@ public:
             Player player { participant, name, role, player_type };
             try {
                 contest.enroll(std::move(player));
-
             } catch (Contest::StatusError& e) {
                 logger->error("Ignore enroll player: Contest status is {}", e.what(), std::to_underlying(contest.status));
                 break;
@@ -215,11 +377,19 @@ public:
                 break;
             }
             if (participant->is_local) {
-                contest.local_role = role;
-                // TODO: support multiple remote waiting players
-                deliver_to_others(msg, participant);
+                // READY_OP should not be sent by local
+                throw std::logic_error("READY_OP should not be sent by local");
             } else {
-                deliver_to_local(msg);
+                if (my_request.has_value() && participant == my_request->receiver) {
+                    deliver_to_local({ OpCode::RECEIVE_REQUEST_RESULT_OP, "accepted", name });
+                    // contest accepted, enroll players
+                    enroll_players(my_request.value());
+                    my_request = std::nullopt;
+                    reject_all_received_requests();
+                } else {
+                    // receive request
+                    receive_new_request({ participant, find_local_participant(), role });
+                }
             }
             deliver_ui_state();
             break;
@@ -227,11 +397,16 @@ public:
         case OpCode::REJECT_OP: {
             contest.reject();
 
+            auto name { receive_participant_name(participant, data1) };
+
             if (participant->is_local) {
-                // TODO: support multiple remote waiting players
-                deliver_to_others(msg, participant);
+                // REJECT_OP should not be sent by local
+                throw std::logic_error("REJECT_OP should not be sent by local");
             } else {
-                deliver_to_local(msg);
+                if (my_request.has_value() && participant == my_request->receiver) {
+                    deliver_to_local({ OpCode::RECEIVE_REQUEST_RESULT_OP, "rejected", name });
+                    my_request = std::nullopt;
+                }
             }
             break;
         }
@@ -269,13 +444,7 @@ public:
             }
 
             deliver_to_others(msg, participant); // broadcast
-            if (contest.result.winner == opponent.role) {
-                opponent.participant->deliver({ OpCode::WIN_PENDING_OP, std::to_string(std::to_underlying(Contest::WinType::SUICIDE)) });
-                participant->deliver({ OpCode::SUICIDE_END_OP });
-            } else if (contest.result.winner == player.role) {
-                participant->deliver({ OpCode::GIVEUP_OP });
-                opponent.participant->deliver({ OpCode::GIVEUP_END_OP }); // radical
-            }
+            check_online_contest_result();
 
             if (contest.status == Contest::Status::ON_GOING) {
                 contest.duration = TIMEOUT;
@@ -284,8 +453,7 @@ public:
                 timer_.async_wait([this, opponent, participant](const asio::error_code& ec) {
                     if (!ec && !timer_cancelled_) {
                         contest.timeout(opponent);
-                        participant->deliver({ OpCode::WIN_PENDING_OP, std::to_string(std::to_underlying(Contest::WinType::TIMEOUT)) });
-                        opponent.participant->deliver({ OpCode::TIMEOUT_END_OP });
+                        check_online_contest_result();
                         deliver_ui_state();
                     }
                 });
@@ -324,6 +492,7 @@ public:
             timer_cancelled_ = true;
             timer_.cancel();
 
+            check_online_contest_result();
             deliver_ui_state();
             break;
         }
@@ -331,7 +500,40 @@ public:
         case OpCode::TIMEOUT_END_OP:
         case OpCode::SUICIDE_END_OP:
         case OpCode::GIVEUP_END_OP: {
-            deliver_to_others(msg, participant); // broadcast
+            if (contest.result.confirmed)
+                break;
+            if (!participant->is_local) {
+                auto player { contest.players.at(Role::NONE, participant) };
+                auto opponent { contest.players.at(-player.role) };
+                if (contest.result.winner == player.role) {
+                    auto gg_op { msg.op };
+                    auto claimed_win_type {
+                        gg_op == OpCode::GIVEUP_END_OP        ? Contest::WinType::GIVEUP
+                            : gg_op == OpCode::TIMEOUT_END_OP ? Contest::WinType::TIMEOUT
+                                                              : Contest::WinType::SUICIDE
+                    };
+                    auto result_valid { claimed_win_type == contest.result.win_type };
+                    // Use lenient validation for timeout
+                    if (claimed_win_type == Contest::WinType::TIMEOUT && !result_valid) {
+                        auto remain_time { std::chrono::duration_cast<milliseconds>(timer_.expiry() - std::chrono::steady_clock::now()) };
+                        // 270ms is the median human reaction time (reference: https://humanbenchmark.com/tests/reactiontime/statistics)
+                        if (remain_time < 270ms) {
+                            result_valid = true;
+                        }
+                    }
+                    if (result_valid) {
+                        contest.confirm();
+                        // reply same GG_OP to confirm
+                        participant->deliver(msg);
+                    } else {
+                        // result is not valid, do nothing
+                    }
+                } else if (contest.result.winner == opponent.role) {
+                    contest.confirm();
+                }
+
+                deliver_ui_state();
+            }
             break;
         }
 
@@ -341,10 +543,8 @@ public:
                 logger->debug("receive LEAVE_OP: is local, do close_except");
                 close_except(participant);
             } else {
-                logger->debug("receive LEAVE_OP: not local, shutdown participant");
-                participant->shutdown();
-                logger->debug("receive LEAVE_OP: deliver_to_local");
-                deliver_to_local(msg);
+                logger->debug("receive LEAVE_OP: not local, deliver LEVEL_OP");
+                participant->deliver({ OpCode::LEAVE_OP });
             }
             logger->debug("receive LEAVE_OP: process end");
 
@@ -356,8 +556,44 @@ public:
             while (recent_msgs_.size() > max_recent_msgs)
                 recent_msgs_.pop_front();
 
-            for (auto participant : participants_)
-                participant->deliver(msg);
+            if (participant->is_local) {
+                throw std::logic_error("CHAT_OP should not be sent by local");
+            } else {
+                auto name = participant->get_name();
+                if (name.empty()) {
+                    name = participant->endpoint().address().to_string();
+                }
+                deliver_to_local({ OpCode::CHAT_RECEIVE_MESSAGE_OP, data1, name });
+            }
+            break;
+        }
+        case OpCode::CHAT_SEND_MESSAGE_OP: {
+            if (participant->is_local) {
+                auto success = false;
+                for (auto participant : participants_) {
+                    if (!participant->get_name().empty() && participant->get_name() == data2) {
+                        participant->deliver({ OpCode::CHAT_OP, data1 });
+                        success = true;
+                    } else if (participant->get_name().empty() && participant->endpoint().address().to_string() == data2) {
+                        participant->deliver({ OpCode::CHAT_OP, data1 });
+                        success = true;
+                    }
+                }
+            } else {
+                throw std::logic_error("CHAT_SEND_MESSAGE_OP should not be sent by remote");
+            }
+            break;
+        }
+        case OpCode::CHAT_SEND_BROADCAST_MESSAGE_OP: {
+            if (participant->is_local) {
+                deliver_to_others({ OpCode::CHAT_OP, data1 }, participant);
+            } else {
+                throw std::logic_error("CHAT_SEND_BROADCAST_MESSAGE_OP should not be sent by remote");
+            }
+            break;
+        }
+        case OpCode::CHAT_RECEIVE_MESSAGE_OP: {
+            // should not be sent by client
             break;
         }
         }
@@ -373,11 +609,38 @@ public:
 
     void leave(Participant_ptr participant)
     {
-        logger->info("{}:{} leave", participant->endpoint().address().to_string(), participant->endpoint().port());
+        logger->info("leave: {}:{} leave", participant->endpoint().address().to_string(), participant->endpoint().port());
+        if (participants_.find(participant) == participants_.end()) {
+            logger->info("leave: {}:{} not found", participant->endpoint().address().to_string(), participant->endpoint().port());
+            return;
+        }
         logger->debug("leave: erase participant, participants_.size() = {}", participants_.size());
         if (participants_.find(participant) != participants_.end())
             participants_.erase(participant);
         logger->debug("leave: erase end, participants_.size() = {}", participants_.size());
+        logger->debug("leave: remove all requests from {}:{} in received_requests", participant->endpoint().address().to_string(), participant->endpoint().port());
+        std::queue<ContestRequest> requests {};
+        requests.swap(received_requests);
+        auto is_first { !requests.empty() && requests.front().sender == participant };
+        while (!requests.empty()) {
+            auto request = requests.front();
+            requests.pop();
+            if (request.sender != participant) {
+                received_requests.push(request);
+            }
+        }
+        if (is_first && !received_requests.empty()) {
+            logger->debug("leave: is_first && !received_requests.empty(), send received_requests.front() to local");
+            deliver_to_local({ OpCode::RECEIVE_REQUEST_OP, received_requests.front().sender->get_name(), received_requests.front().role.map("b", "w", "") });
+        }
+        if (participant == my_request->receiver) {
+            logger->debug("leave: my_request->receiver == participant, clear my_request");
+            my_request = std::nullopt;
+        }
+        if (!participant->get_name().empty()) {
+            logger->debug("leave: participant->get_name() is not empty, send LEAVE_OP to local");
+            deliver_to_local({ OpCode::LEAVE_OP, participant->get_name() });
+        }
     }
 
     void close_except(Participant_ptr participant)
@@ -392,10 +655,6 @@ public:
                 p->deliver({ OpCode::LEAVE_OP });
                 logger->debug("close_except: erase it");
                 it = participants_.erase(it);
-                // logger->debug("close_except: stop");
-                // p->stop();
-                // logger->debug("close_except: shutdown");
-                // p->shutdown();
                 logger->debug("close_except: end");
             } else {
                 logger->debug("close_except: skip self");
@@ -442,14 +701,18 @@ public:
     }
     tcp::endpoint endpoint() const override
     {
-        return socket_.local_endpoint();
+        return is_local ? socket_.local_endpoint() : socket_.remote_endpoint();
     }
     bool operator==(const Participant& participant) const override
     {
+        // TODO: Use a better comparsion
+        if (!get_name().empty() || !participant.get_name().empty())
+            return get_name() == participant.get_name();
         return endpoint() == participant.endpoint();
     }
     Session(tcp::socket socket, Room& room, bool is_local = false)
         : Participant { is_local }
+        , name_("")
         , socket_(std::move(socket))
         , timer_(socket_.get_executor())
         , room_(room)
@@ -478,7 +741,6 @@ public:
     void stop() override
     {
         logger->debug("stop: {}:{}", endpoint().address().to_string(), std::to_string(endpoint().port()));
-
         logger->debug("stop: leave room");
         room_.leave(shared_from_this());
         logger->debug("stop: close socket");
@@ -488,7 +750,8 @@ public:
         logger->debug("stop: end");
     }
 
-    void shutdown() override
+private:
+    void shutdown()
     {
         logger->debug("shutdown: {}:{}", endpoint().address().to_string(), std::to_string(endpoint().port()));
         asio::error_code ec;
@@ -496,7 +759,6 @@ public:
         logger->debug("shutdown: end");
     }
 
-private:
     awaitable<void> reader()
     {
         try {
@@ -511,7 +773,8 @@ private:
             }
         } catch (std::exception& e) {
             logger->error("Exception: {}", e.what());
-            stop();
+            if (!is_local)
+                stop();
         }
     }
 
@@ -527,13 +790,16 @@ private:
                     co_await asio::async_write(socket_, asio::buffer(msg.to_string() + "\n"),
                         use_awaitable);
                     write_msgs_.pop_front();
-                    if (msg.op == OpCode::LEAVE_OP && !is_local)
+                    if (msg.op == OpCode::LEAVE_OP && !is_local) {
+                        room_.leave(shared_from_this());
                         shutdown();
+                    }
                 }
             }
         } catch (std::exception& e) {
             logger->error("Exception: {}", e.what());
-            stop();
+            if (!is_local)
+                stop();
         }
     }
 

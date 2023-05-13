@@ -1,37 +1,13 @@
 #pragma once
-#ifndef _EXPORT
-#define _EXPORT
-#endif
 
 #include <algorithm>
 #include <array>
-#include <charconv>
 #include <iostream>
+#include <nlohmann/json.hpp>
 #include <ranges>
 #include <vector>
 
-#ifdef __GNUC__
-#include <range/v3/all.hpp>
-#else
-namespace ranges = std::ranges;
-#endif
-
-template <typename T>
-constexpr auto stoi_base(std::string_view str)
-{
-    T result;
-    auto [p, ec] = std::from_chars(str.data(), str.data() + str.size(), result);
-    switch (ec) {
-    case std::errc::invalid_argument:
-        throw std::invalid_argument { "no conversion" };
-    case std::errc::result_out_of_range:
-        throw std::out_of_range { "out of range" };
-    default:
-        return result;
-    };
-}
-constexpr auto stoi = stoi_base<int>;
-constexpr auto stoull = stoi_base<unsigned long long>;
+#include "utility.hpp"
 
 _EXPORT constexpr inline auto rank_n = 9;
 
@@ -48,7 +24,7 @@ _EXPORT struct Position {
         return { x + p.x, y + p.y };
     }
     constexpr explicit operator bool() const { return x >= 0 && y >= 0; }
-    // constexpr auto operator<=>(const Position& p) const = default;
+    constexpr auto operator<=>(const Position& p) const = default;
     auto to_string() const -> std::string
     {
         return std::string(1, 'A' + x) + std::to_string(y + 1);
@@ -57,6 +33,8 @@ _EXPORT struct Position {
         : Position(str[0] - 'A', stoi(str.substr(1)) - 1)
     {
     }
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Position, x, y)
 };
 
 _EXPORT struct Role {

@@ -1,10 +1,17 @@
-#include <charconv>
+#include <algorithm>
 #include <deque>
 #include <iostream>
 #include <sstream>
 #include <string_view>
 #include <thread>
 #include <vector>
+
+#ifdef _WIN32
+size_t operator"" uZ(unsigned long long val)
+{
+    return { val };
+}
+#endif
 
 using std::string;
 using std::string_view;
@@ -22,122 +29,101 @@ using asio::detached;
 using asio::use_awaitable;
 using asio::ip::tcp;
 
+#include <fmt/format.h>
 #include <fmt/ranges.h>
-#include <gtest/gtest.h>
-#include <range/v3/all.hpp>
 
-template <typename T>
-constexpr auto stoi_base(string_view str)
-{
-    T result;
-    auto [p, ec] = std::from_chars(str.data(), str.data() + str.size(), result);
-    switch (ec) {
-    case std::errc::invalid_argument:
-        throw std::invalid_argument { "no conversion" };
-    case std::errc::result_out_of_range:
-        throw std::out_of_range { "out of range" };
-    default:
-        return result;
-    };
-}
-constexpr auto stoi = stoi_base<int>;
+#include <gtest/gtest.h>
+
+#include "../utility.hpp"
+
+constexpr auto host = "127.0.0.1",
+               port1 = "2333", port2 = "2334";
+
+struct ServerProcess {
+#ifdef _WIN32
+    constexpr static auto exec_cmd { "cmd /c start ./nogo-server 2333 2334" };
+    constexpr static auto kill_cmd { "taskkill /f /im nogo-server.exe" };
+#else
+    constexpr static auto exec_cmd { "screen -dmS nogo-server ./nogo-server 2333 2334" };
+    constexpr static auto kill_cmd { "screen -S nogo-server -X stuff \"^C\"" };
+#endif
+
+    ServerProcess()
+    {
+        auto ret = system(exec_cmd);
+    }
+    ~ServerProcess()
+    {
+        auto ret = system(kill_cmd);
+    }
+};
+
+asio::io_context io_context { 1 };
 
 class Session : public std::enable_shared_from_this<Session> {
 public:
     Session(tcp::socket socket)
         : socket(std::move(socket))
-        , timer(socket.get_executor())
     {
-        timer.expires_at(std::chrono::steady_clock::time_point::max());
     }
 
-    void start()
-    {
-        co_spawn(
-            socket.get_executor(), [self = shared_from_this()] { return self->reader(); }, detached);
-        co_spawn(
-            socket.get_executor(), [self = shared_from_this()] { return self->writer(); }, detached);
-    }
-
-    void deliver(string msg)
-    {
-        write_msgs.push_back(msg);
-        timer.cancel_one();
-    }
-
-    void stop()
+    ~Session()
     {
         socket.close();
-        timer.cancel();
     }
 
-    awaitable<void> reader()
+    auto do_read()
     {
-        try {
-            for (std::string read_msg;;) {
-                std::size_t n = co_await asio::async_read_until(socket, asio::dynamic_buffer(read_msg, 1024), "\n", use_awaitable);
-                string msg { read_msg.substr(0, n) };
-                read_msgs.push_back(msg);
-                read_msg.erase(0, n);
-            }
-        } catch (std::exception& e) {
-            std::cerr << "Exception: " << e.what() << "\n";
-            stop();
-        }
+        io_context.restart();
+        asio::steady_timer timer { io_context, 1000ms };
+        timer.async_wait([&](auto ec) {
+            if (!ec)
+                throw std::runtime_error { fmt::format("timeout reading from {}", to_string()) };
+        });
+        asio::async_read_until(socket, buffer, '\n', [&](auto ec, auto) {
+            if (ec != asio::error::operation_aborted)
+                timer.cancel();
+        });
+        io_context.run();
+
+        std::istream stream(&buffer);
+        std::string message;
+        std::getline(stream, message);
+        return message;
     }
 
-    awaitable<void> writer()
+    auto do_read(size_t count)
     {
-        try {
-            while (socket.is_open()) {
-                if (write_msgs.empty()) {
-                    asio::error_code ec;
-                    co_await timer.async_wait(redirect_error(use_awaitable, ec));
-                } else {
-                    co_await asio::async_write(socket, asio::buffer(write_msgs.front() + "\n"),
-                        use_awaitable);
-                    write_msgs.pop_front();
-                }
-            }
-        } catch (std::exception& e) {
-            std::cerr << "Exception: " << e.what() << "\n";
-            stop();
-        }
+        return ranges::views::iota(0uL, count)
+            | ranges::views::transform([this](auto) { return do_read(); })
+            | ranges::to<vector<string>>();
+    }
+
+    void do_write(string msg)
+    {
+        asio::write(socket, asio::buffer(msg + '\n'));
+    }
+
+    auto to_string() const -> string
+    {
+        return socket.remote_endpoint().address().to_string() + ":" + std::to_string(socket.remote_endpoint().port());
     }
 
     tcp::socket socket;
-    asio::steady_timer timer;
-    std::deque<string> write_msgs;
-    std::deque<string> read_msgs;
+    asio::streambuf buffer;
+    bool timeout { false };
 };
 
-auto connect(asio::io_context& io_context,
-    string_view ip,
-    string_view port) -> awaitable<std::shared_ptr<Session>>
+auto launch_client(asio::io_context& io_context, string_view ip, string_view port)
 {
     tcp::socket socket { io_context };
-    try {
-        tcp::endpoint endpoint { asio::ip::make_address(ip), (asio::ip::port_type)stoi(port) };
-        co_await socket.async_connect(endpoint, use_awaitable);
-        co_return std::make_shared<Session>(std::move(socket));
-    } catch (std::exception& e) {
-        std::cout << e.what() << "\n";
-    }
-}
-
-bool is_run = false;
-
-auto launch_client(asio::io_context& io_context,
-    string_view ip,
-    string_view port) -> awaitable<std::shared_ptr<Session>>
-{
-    auto session = co_await connect(io_context, ip, port);
-    session->start();
-    co_return session;
+    socket.connect({ asio::ip::make_address(ip), integer_cast<asio::ip::port_type>(port) });
+    return std::make_shared<Session>(std::move(socket));
 }
 
 const vector<vector<string>> send_msgs1 {
-    { R"({"op":200000,"data1":"player1","data2":"b"})" },
+    { R"({"op":100011,"data1":"Player1","data2":""})" },
+    { R"({"op":100015,"data1":"","data2":""})" },
 
     { R"({"op":200002,"data1":"A1","data2":"1683446065123"})" },
     { R"({"op":200002,"data1":"B2","data2":"1683446067123"})" },
@@ -145,30 +131,37 @@ const vector<vector<string>> send_msgs1 {
     {},
 };
 const vector<vector<string>> send_msgs2 {
-    { R"({"op":200000,"data1":"player2","data2":""})" },
+    { R"({"op":200000,"data1":"Player2","data2":"w"})" },
+    {},
 
     { R"({"op":200002,"data1":"A2","data2":"1683446066123"})" },
     { R"({"op":200002,"data1":"B1","data2":"1683446068123"})" },
 
     { R"({"op":200005,"data1":"","data2":""})" },
-
-    {},
 };
 
 const vector<vector<string>> recv_msgs1 {
     {},
-    { R"({"data1":"player2","data2":"","op":200000})" },
+    { R"({"data1":"Player2","data2":"w","op":100014})",
+        R"({"data1":"{TIMEOUT}","data2":"{\"game\":null,\"game_result\":{\"win_type\":0,\"winner\":0},\"is_gaming\":false,\"status\":0}","op":100001})" },
+    { R"({"data1":"{TIMEOUT}","data2":"{\"game\":null,\"game_result\":{\"win_type\":0,\"winner\":0},\"is_gaming\":false,\"status\":0}","op":100001})" },
+    { R"({"data1":"{TIMEOUT}","data2":"{\"game\":{\"chessboard\":[[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0]],\"disabled_positions\":[],\"end_time\":0,\"last_move\":null,\"metadata\":{\"player_opposing\":{\"avatar\":\"\",\"chess_type\":-1,\"name\":\"Player2\",\"type\":0},\"player_our\":{\"avatar\":\"\",\"chess_type\":1,\"name\":\"Player1\",\"type\":0},\"size\":9,\"turn_timeout\":30},\"move_count\":0,\"now_playing\":1,\"start_time\":{TIMEOUT},\"statistics\":[]},\"game_result\":{\"win_type\":0,\"winner\":0},\"is_gaming\":true,\"status\":1}","op":100001})" },
+
+    { R"({"data1":"{TIMEOUT}","data2":"{\"game\":{\"chessboard\":[[1,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0]],\"disabled_positions\":[],\"end_time\":0,\"last_move\":{\"x\":0,\"y\":0},\"metadata\":{\"player_opposing\":{\"avatar\":\"\",\"chess_type\":-1,\"name\":\"Player2\",\"type\":0},\"player_our\":{\"avatar\":\"\",\"chess_type\":1,\"name\":\"Player1\",\"type\":0},\"size\":9,\"turn_timeout\":30},\"move_count\":1,\"now_playing\":-1,\"start_time\":{TIMEOUT},\"statistics\":[]},\"game_result\":{\"win_type\":0,\"winner\":0},\"is_gaming\":true,\"status\":1}","op":100001})" },
+    { R"({"data1":"A2","data2":"1683446066123","op":200002})",
+        R"({"data1":"{TIMEOUT}","data2":"{\"game\":{\"chessboard\":[[1,-1,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0]],\"disabled_positions\":[],\"end_time\":0,\"last_move\":{\"x\":0,\"y\":1},\"metadata\":{\"player_opposing\":{\"avatar\":\"\",\"chess_type\":-1,\"name\":\"Player2\",\"type\":0},\"player_our\":{\"avatar\":\"\",\"chess_type\":1,\"name\":\"Player1\",\"type\":0},\"size\":9,\"turn_timeout\":30},\"move_count\":2,\"now_playing\":1,\"start_time\":{TIMEOUT},\"statistics\":[]},\"game_result\":{\"win_type\":0,\"winner\":0},\"is_gaming\":true,\"status\":1}","op":100001})" },
+    { R"({"data1":"{TIMEOUT}","data2":"{\"game\":{\"chessboard\":[[1,-1,0,0,0,0,0,0,0],[0,1,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0]],\"disabled_positions\":[{\"x\":1,\"y\":0}],\"end_time\":0,\"last_move\":{\"x\":1,\"y\":1},\"metadata\":{\"player_opposing\":{\"avatar\":\"\",\"chess_type\":-1,\"name\":\"Player2\",\"type\":0},\"player_our\":{\"avatar\":\"\",\"chess_type\":1,\"name\":\"Player1\",\"type\":0},\"size\":9,\"turn_timeout\":30},\"move_count\":3,\"now_playing\":-1,\"start_time\":{TIMEOUT},\"statistics\":[]},\"game_result\":{\"win_type\":0,\"winner\":0},\"is_gaming\":true,\"status\":1}","op":100001})" },
+    { R"({"data1":"B1","data2":"1683446068123","op":200002})",
+        R"({"data1":"2","data2":"","op":100006})",
+        R"({"data1":"{TIMEOUT}","data2":"{\"game\":{\"chessboard\":[[1,-1,0,0,0,0,0,0,0],[-1,1,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0]],\"disabled_positions\":[{\"x\":0,\"y\":2},{\"x\":2,\"y\":0}],\"end_time\":{TIMEOUT},\"last_move\":{\"x\":1,\"y\":0},\"metadata\":{\"player_opposing\":{\"avatar\":\"\",\"chess_type\":-1,\"name\":\"Player2\",\"type\":0},\"player_our\":{\"avatar\":\"\",\"chess_type\":1,\"name\":\"Player1\",\"type\":0},\"size\":9,\"turn_timeout\":30},\"move_count\":4,\"now_playing\":1,\"start_time\":{TIMEOUT},\"statistics\":[]},\"game_result\":{\"win_type\":2,\"winner\":1},\"is_gaming\":false,\"status\":2}","op":100001})" },
 
     {},
-    { R"({"data1":"A2","data2":"1683446065123","op":200002})" },
-    {},
-    { R"({"data1":"B1","data2":"1683446068123","op":200002})", R"({"data1":"","data2":"","op":100006})" },
-
-    {},
-    { R"({"data1":"","data2":"","op":200005})" },
+    { R"({"data1":"{TIMEOUT}","data2":"{\"game\":{\"chessboard\":[[1,-1,0,0,0,0,0,0,0],[-1,1,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0]],\"disabled_positions\":[{\"x\":0,\"y\":2},{\"x\":2,\"y\":0}],\"end_time\":{TIMEOUT},\"last_move\":{\"x\":1,\"y\":0},\"metadata\":{\"player_opposing\":{\"avatar\":\"\",\"chess_type\":-1,\"name\":\"Player2\",\"type\":0},\"player_our\":{\"avatar\":\"\",\"chess_type\":1,\"name\":\"Player1\",\"type\":0},\"size\":9,\"turn_timeout\":30},\"move_count\":4,\"now_playing\":1,\"start_time\":{TIMEOUT},\"statistics\":[]},\"game_result\":{\"win_type\":2,\"winner\":1},\"is_gaming\":false,\"status\":2}","op":100001})" },
 };
 const vector<vector<string>> recv_msgs2 {
-    { R"({"data1":"player1","data2":"b","op":200000})" },
+    {},
+    {},
+    { R"({"data1":"Player1","data2":"b","op":200000})" },
     {},
 
     { R"({"data1":"A1","data2":"1683446065123","op":200002})" },
@@ -184,76 +177,91 @@ const vector<vector<string>> recv_msgs2 {
 #include <stdio.h>
 #include <stdlib.h>
 
-string host, port1, port2;
-
 TEST(nogo, server)
 {
-#ifdef _WIN32
-    auto server_cmd = "cmd /c start ./nogo-server " + port1 + " " + port2;
-#else
-    auto server_cmd = "screen -dmS nogo-server ./nogo-server " + port1 + " " + port2;
-#endif
-    int ret = system(server_cmd.c_str());
+    ServerProcess process {};
 
     std::this_thread::sleep_for(3s);
 
-    asio::io_context io_context { 1 };
+    auto c1 = launch_client(io_context, host, port1);
+    auto c2 = launch_client(io_context, host, port2);
 
-    asio::signal_set signals(io_context, SIGINT, SIGTERM);
-    signals.async_wait([&](auto, auto) { io_context.stop(); });
+    std::this_thread::sleep_for(1s);
 
-    co_spawn(
-        io_context, [&]() -> awaitable<void> {
-            auto c1 = co_await launch_client(io_context, host, port1);
-            auto c2 = co_await launch_client(io_context, host, port2);
+    auto round { send_msgs1.size() * 2 };
+    for (auto i : ranges::views::iota(0uZ, round)) {
+        auto c { i % 2 ? c2 : c1 };
+        auto send_msg { i % 2 ? send_msgs2[i / 2] : send_msgs1[i / 2] };
 
-            for (auto i { 0 }; auto [send_msg1, send_msg2] : ranges::views::zip(send_msgs1, send_msgs2)) {
-                for (const auto& msg : send_msg1)
-                    std::cout << "msg: " << msg << "\n", c1->deliver(msg);
-                for (auto [read_msg, recv_msg] : ranges::views::zip(c1->read_msgs, recv_msgs1[i]))
-                    EXPECT_EQ(read_msg, recv_msg) << "p1 recv is wrong after p1 send" << fmt::format("{}", send_msg1);
-                c1->read_msgs.clear();
-                for (auto [read_msg, recv_msg] : ranges::views::zip(c2->read_msgs, recv_msgs2[i]))
-                    EXPECT_EQ(read_msg, recv_msg) << "p2 recv is wrong after p1 send" << fmt::format("{}", send_msg1);
-                c2->read_msgs.clear();
-                std::this_thread::sleep_for(3s);
-                ++i;
+        for (auto& msg : send_msg)
+            c->do_write(msg);
 
-                for (const auto& msg : send_msg2)
-                    c2->deliver(msg);
-                for (auto [read_msg, recv_msg] : ranges::views::zip(c1->read_msgs, recv_msgs1[i]))
-                    EXPECT_EQ(read_msg, recv_msg) << "p1 recv is wrong after p2 send" << fmt::format("{}", send_msg2);
-                c1->read_msgs.clear();
-                for (auto [read_msg, recv_msg] : ranges::views::zip(c2->read_msgs, recv_msgs2[i]))
-                    EXPECT_EQ(read_msg, recv_msg) << "p2 recv is wrong after p2 send" << fmt::format("{}", send_msg2);
-                c2->read_msgs.clear();
-                std::this_thread::sleep_for(3s);
-                ++i;
+        vector<string> recv_msg1, recv_msg2;
+
+        try {
+            recv_msg1 = c1->do_read(recv_msgs1[i].size());
+        } catch (const std::exception& e) {
+            FAIL() << e.what();
+        }
+        // fmt::print("\033[31mrecv_msg1: {}\033[0m\n", recv_msg1);
+
+        try {
+            recv_msg2 = c2->do_read(recv_msgs2[i].size());
+        } catch (const std::exception& e) {
+            FAIL() << e.what();
+        }
+
+        // fmt::print("\033[32mrecv_msg2: {}\033[0m\n", recv_msg2);
+
+        constexpr string_view placeholder = "{TIMEOUT}";
+        constexpr auto timestamp_len = 13;
+        for (auto [msg, expect] : ranges::views::zip(recv_msg1, recv_msgs1[i])) {
+            auto expect_s = expect | ranges::views::split(placeholder) | ranges::to<vector<string>>();
+            auto expect_msg_length = expect.size() - (expect_s.size() - 1) * placeholder.size() + (expect_s.size() - 1) * timestamp_len;
+            bool match = msg.size() == expect_msg_length;
+            if (match) {
+                if (expect_s.size() == 1) {
+                    match = msg == expect;
+                } else {
+                    auto msg_s = expect_s | ranges::views::transform([&](auto& s) {
+                        auto pos = expect.find(s);
+                        auto index = std::find(expect_s.begin(), expect_s.end(), s) - expect_s.begin();
+                        if (pos == 0)
+                            return msg.substr(0, s.size());
+                        auto actual_pos = pos + (timestamp_len - placeholder.size()) * index;
+                        return msg.substr(actual_pos, s.size());
+                    }) | ranges::to<vector<string>>();
+                    match = ranges::equal(msg_s, expect_s);
+                }
             }
-            co_return;
-        },
-        asio::detached);
-
-    io_context.run();
-
-    // c2.write(sendmsg[6]);
-    // c2.close();
-
-    // c1.write(sendmsg[6]);
-    // c1.close();
+            EXPECT_TRUE(match) << "message not match in round " << i + 1 << "!\nreceived message: " << msg << "\nexpected message: " << expect;
+        }
+        for (auto [msg, expect] : ranges::views::zip(recv_msg2, recv_msgs2[i])) {
+            auto expect_s = expect | ranges::views::split(placeholder) | ranges::to<vector<string>>();
+            auto expect_msg_length = expect.size() - (expect_s.size() - 1) * placeholder.size() + (expect_s.size() - 1) * timestamp_len;
+            bool match = msg.size() == expect_msg_length;
+            if (match) {
+                if (expect_s.size() == 1) {
+                    match = msg == expect;
+                } else {
+                    auto msg_s = expect_s | ranges::views::transform([&](auto& s) {
+                        auto pos = expect.find(s);
+                        auto index = std::find(expect_s.begin(), expect_s.end(), s) - expect_s.begin();
+                        if (pos == 0)
+                            return msg.substr(0, s.size());
+                        auto actual_pos = pos + (timestamp_len - placeholder.size()) * index;
+                        return msg.substr(actual_pos, s.size());
+                    }) | ranges::to<vector<string>>();
+                    match = ranges::equal(msg_s, expect_s);
+                }
+            }
+            EXPECT_TRUE(match) << "message not match in round " << i + 1 << "!\nreceived message: " << msg << "\nexpected message: " << expect;
+        }
+    }
+    // TODO: Send LEAVE_OP
 }
 int main(int argc, char* argv[])
 {
-    if (argc < 4) {
-        std::cerr << "Usage: " << argv[0] << " <host> <local_port> <remote_port>\n";
-        return 1;
-    }
-    host = argv[1];
-    port1 = argv[2];
-    port2 = argv[3];
-    std::cout << "port1 " << port1 << std::endl;
-    std::cout << "port2 " << port2 << std::endl;
-
     testing::InitGoogleTest();
     return RUN_ALL_TESTS();
 }

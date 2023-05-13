@@ -1,7 +1,4 @@
 #pragma once
-#ifndef _EXPORT
-#define _EXPORT
-#endif
 
 #include <algorithm>
 #include <cctype>
@@ -11,21 +8,13 @@
 #include <utility>
 #include <vector>
 
-#ifdef __GNUC__
-#include <range/v3/all.hpp>
-namespace ranges::views {
-auto join_with = join;
-};
-#else
-namespace ranges = std::ranges;
-#endif
-
 #include <asio/ip/tcp.hpp>
 using asio::ip::tcp;
 
 #include "log.hpp"
 #include "message.hpp"
 #include "rule.hpp"
+#include "utility.hpp"
 
 class Participant {
 public:
@@ -43,12 +32,11 @@ public:
     virtual tcp::endpoint endpoint() const = 0;
     virtual void deliver(Message msg) = 0;
     virtual void stop() = 0;
-    virtual void shutdown() { }
     virtual bool operator==(const Participant&) const = 0;
 
     auto to_string() const
     {
-        return endpoint().address().to_string();
+        return endpoint().address().to_string() + ":" + std::to_string(endpoint().port());
     }
 };
 
@@ -174,6 +162,7 @@ public:
     struct GameResult {
         Role winner;
         Contest::WinType win_type;
+        bool confirmed;
     };
     class TimeLimitExceededException : public std::runtime_error {
         using runtime_error::runtime_error;
@@ -191,6 +180,8 @@ public:
     Status status {};
     GameResult result {};
     std::chrono::seconds duration;
+    std::chrono::system_clock::time_point start_time;
+    std::chrono::system_clock::time_point end_time;
     Role local_role { Role::NONE };
 
     void clear()
@@ -201,6 +192,11 @@ public:
         status = {};
         result = {};
         should_giveup = false;
+        local_role = Role::NONE;
+    }
+    void confirm()
+    {
+        result.confirmed = true;
     }
     void reject()
     {
@@ -214,8 +210,10 @@ public:
         if (status != Status::NOT_PREPARED)
             throw StatusError { "Contest already started" };
         players.insert(std::move(player));
-        if (players.contains(Role::BLACK) && players.contains(Role::WHITE))
+        if (players.contains(Role::BLACK) && players.contains(Role::WHITE)) {
             status = Status::ON_GOING;
+            start_time = std::chrono::system_clock::now();
+        }
     }
 
     void play(Player player, Position pos)
@@ -237,6 +235,7 @@ public:
         if (auto winner = current.is_over()) {
             status = Status::GAME_OVER;
             result = { winner, WinType::SUICIDE };
+            end_time = std::chrono::system_clock::now();
         }
         if (!current.available_actions().size())
             should_giveup = true;
@@ -250,6 +249,7 @@ public:
             throw std::logic_error { player.name + " not allowed to concede" };
         status = Status::GAME_OVER;
         result = { -player.role, WinType::GIVEUP };
+        end_time = std::chrono::system_clock::now();
     }
 
     void timeout(Player player)
@@ -260,8 +260,10 @@ public:
             throw std::logic_error { "not in " + player.name + "'s turn" };
         status = Status::GAME_OVER;
         result = { -player.role, WinType::TIMEOUT };
+        end_time = std::chrono::system_clock::now();
     }
-    auto round() const { return moves.size(); }
+
+    auto round() const -> int { return moves.size(); }
 
     auto encode() const -> string
     {

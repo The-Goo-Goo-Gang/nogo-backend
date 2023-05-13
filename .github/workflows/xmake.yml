@@ -1,48 +1,84 @@
-name: Build with XMake
+name: Build and Test
 
 on:
   push:
-    branches: [ "main", "dev", "dev-huancheng" ]
+    branches: ["main", "dev", "dev-huancheng"]
   pull_request:
-    branches: [ "main", "dev" ]
+    branches: ["main", "dev"]
 
 jobs:
-  build:
+  windows-mingw:
     runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v3
-    - name: Set up XMake
-      uses: xmake-io/github-action-setup-xmake@v1
-      with:
-        xmake-version: latest
-    - name: Set up MSYS2
-      uses: msys2/setup-msys2@v2
-      with:
-        msystem: MINGW64
-        location: C:\tmp_msys2
-        install: >-
-          git
-          base-devel
-          mingw-w64-x86_64-toolchain
-    - name: Configure PATH
-      run : |
-        Add-Content $env:GITHUB_PATH "C:\tmp_msys2\msys64\mingw64\bin"
-        Add-Content $env:GITHUB_PATH "C:\tmp_msys2\msys64\usr\bin"
-    - name: Configure XMake
-      run: xmake f -p mingw --mingw=C:/tmp_msys2/msys64/mingw64 -c --ldflags="-LC:\tmp_msys2\msys64\mingw64\lib -lws2_32 -lwsock32" -y
-    - name: Upload log when Failure
-      if: ${{ failure() }}
-      uses: actions/upload-artifact@v2
-      with:
-        name: xmake-log
-        path: |
-          C:\Users\runneradmin\AppData\Local\.xmake\cache\packages\2304\r\range-v3\0.12.0\installdir.failed\logs\install.txt
-    - name: Build
-      run: xmake
-    - name: Upload artifact
-      uses: actions/upload-artifact@v2
-      with:
-        name: xmake-artifact
-        path: |
-          build\mingw\x86_64\release\*.exe
+      - uses: actions/checkout@v3
+      - name: Cache MSYS2
+        id: cache
+        uses: actions/cache@v3
+        with:
+          path: C:\tmp_msys2
+          key: ${{ runner.os }}-msys2
+      - name: Set up XMake
+        uses: xmake-io/github-action-setup-xmake@v1
+        with:
+          xmake-version: latest
+      - name: Set up MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          location: C:\tmp_msys2
+          install: >-
+            git
+            base-devel
+            mingw-w64-x86_64-toolchain
+      - name: Configure PATH
+        run: |
+          Add-Content $env:GITHUB_PATH "C:\tmp_msys2\msys64\mingw64\bin"
+          Add-Content $env:GITHUB_PATH "C:\tmp_msys2\msys64\usr\bin"
+      - name: Build
+        run: |
+          xmake f -p mingw --mingw=C:/tmp_msys2/msys64/mingw64 -c --ldflags="-LC:\tmp_msys2\msys64\mingw64\lib -lws2_32 -lwsock32 -static" -y
+          xmake -y
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: xmake-artifact
+          path: build\mingw\x86_64\release\*.exe
+      - name: Test
+        run: xmake run test
+  windows-msvc:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up XMake
+        uses: xmake-io/github-action-setup-xmake@v1
+        with:
+          xmake-version: latest
+      - name: Build
+        run: xmake -y
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: xmake-artifact
+          path: |
+            build\windows\x64\release\*.exe
+      - name: Test
+        run: xmake run test
+  ubuntu-gcc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up XMake
+        uses: xmake-io/github-action-setup-xmake@v1
+        with:
+          xmake-version: latest
+      - name: Build
+        run: xmake -y
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: xmake-artifact
+          path: |
+            build/linux/x86_64/release/*
+      - name: Test
+        run: xmake run test
