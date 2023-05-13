@@ -1,7 +1,4 @@
 #pragma once
-#ifndef _EXPORT
-#define _EXPORT
-#endif
 
 #include <algorithm>
 #include <cctype>
@@ -11,21 +8,13 @@
 #include <utility>
 #include <vector>
 
-#ifdef __GNUC__
-#include <range/v3/all.hpp>
-namespace ranges::views {
-auto join_with = join;
-};
-#else
-namespace ranges = std::ranges;
-#endif
-
 #include <asio/ip/tcp.hpp>
 using asio::ip::tcp;
 
 #include "log.hpp"
 #include "message.hpp"
 #include "rule.hpp"
+#include "utility.hpp"
 
 class Participant {
 public:

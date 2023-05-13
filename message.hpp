@@ -1,10 +1,9 @@
 #pragma once
-#ifndef _EXPORT
-#define _EXPORT
-#endif
 
 #include <nlohmann/json.hpp>
 #include <string_view>
+
+#include "utility.hpp"
 
 using nlohmann::json;
 using std::string;

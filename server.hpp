@@ -9,9 +9,6 @@
 //
 
 #pragma once
-#ifndef _EXPORT
-#define _EXPORT
-#endif
 
 #include <asio/awaitable.hpp>
 #include <asio/co_spawn.hpp>
@@ -43,6 +40,7 @@
 #include "log.hpp"
 #include "message.hpp"
 #include "uimessage.hpp"
+#include "utility.hpp"
 
 using asio::awaitable;
 using asio::co_spawn;
@@ -55,12 +53,6 @@ using namespace std::chrono_literals;
 using std::chrono::milliseconds;
 using std::chrono::seconds;
 using std::chrono::system_clock;
-
-#ifdef __GNUC__
-#include <range/v3/all.hpp>
-#else
-namespace ranges = std::ranges;
-#endif
 
 constexpr auto TIMEOUT { 30s };
 
@@ -217,7 +209,7 @@ public:
             // int timeout = std::stoi(msg.data1);
             // int rank_n = std::stoi(msg.data2);
 
-            seconds duration { std::stoi(msg.data1) };
+            seconds duration { stoi(data1) };
             contest.duration = duration;
 
             Player player1 { participant, "BLACK", Role::BLACK, PlayerType::LOCAL_HUMAN_PLAYER },
@@ -270,7 +262,7 @@ public:
             // data1 is host:port, data2 is role
             auto host { data1.substr(0, data1.find(':')) };
             auto port { data1.substr(data1.find(':') + 1) };
-            auto ep = tcp::endpoint { asio::ip::make_address(host), static_cast<asio::ip::port_type>(std::stoi(std::string { port })) };
+            auto ep = tcp::endpoint { asio::ip::make_address(host), integer_cast<asio::ip::port_type>(port) };
             Role role { data2 };
 
             auto participants = participants_ | std::views::filter([ep](auto p) { return p->endpoint() == ep; })
