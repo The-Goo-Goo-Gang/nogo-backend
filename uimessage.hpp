@@ -1,11 +1,7 @@
 #pragma once
-#ifndef _EXPORT
-#define _EXPORT
-#endif
 
 #include <algorithm>
 #include <array>
-#include <ctime>
 #include <chrono>
 #include <nlohmann/json.hpp>
 #include <optional>
@@ -16,12 +12,7 @@
 #include "contest.hpp"
 #include "message.hpp"
 #include "rule.hpp"
-
-#ifdef __GNUC__
-#include <range/v3/all.hpp>
-#else
-namespace ranges = std::ranges;
-#endif
+#include "utility.hpp"
 
 using nlohmann::json;
 using std::string;

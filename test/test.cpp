@@ -34,23 +34,8 @@ using asio::ip::tcp;
 #include <fmt/ranges.h>
 
 #include <gtest/gtest.h>
-#include <range/v3/all.hpp>
 
-template <typename T>
-constexpr auto stoi_base(string_view str)
-{
-    T result;
-    auto [p, ec] = std::from_chars(str.data(), str.data() + str.size(), result);
-    switch (ec) {
-    case std::errc::invalid_argument:
-        throw std::invalid_argument { "no conversion" };
-    case std::errc::result_out_of_range:
-        throw std::out_of_range { "out of range" };
-    default:
-        return result;
-    };
-}
-constexpr auto stoi = stoi_base<int>;
+#include "../utility.hpp"
 
 constexpr auto host = "127.0.0.1",
                port1 = "2333", port2 = "2334";
@@ -133,7 +118,7 @@ public:
 auto launch_client(asio::io_context& io_context, string_view ip, string_view port)
 {
     tcp::socket socket { io_context };
-    socket.connect({ asio::ip::make_address(ip), static_cast<asio::ip::port_type>(stoi(port)) });
+    socket.connect({ asio::ip::make_address(ip), integer_cast<asio::ip::port_type>(port) });
     return std::make_shared<Session>(std::move(socket));
 }
 
