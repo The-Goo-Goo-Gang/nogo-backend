@@ -66,12 +66,31 @@ _EXPORT struct Player {
     {
         return !name.empty() && std::ranges::all_of(name, [](auto c) { return std::isalnum(c) || c == '_'; });
     }
+    auto to_string() const
+    {
+        return fmt::format("ip:{}, name:{}, role:{}, type:{}",
+            participant->to_string(), name, role.to_string(), std::to_underlying(type));
+    }
 };
 
 class PlayerList {
     std::vector<Player> players;
 
 public:
+    class PlayerExistException : public std::logic_error {
+        using std::logic_error::logic_error;
+    };
+    class PlayerListFullException : public std::logic_error {
+        using std::logic_error::logic_error;
+    };
+    class RoleOccupiedException : public std::logic_error {
+        using std::logic_error::logic_error;
+    };
+    auto to_string() const
+    {
+        return players | ranges::views::transform([](auto& p) { return p.to_string(); })
+            | ranges::views::join_with(';') | ranges::to<std::string>();
+    }
     auto find(Role role, Participant_ptr participant = nullptr)
     {
         // If the criteria is valid, the player must match it
@@ -88,11 +107,8 @@ public:
     auto at(Role role, Participant_ptr participant = nullptr) -> Player&
     {
         auto it = find(role, participant);
-        if (!it) {
-            logger->info("role: {}, participant: {}", role.to_string(), participant ? participant->to_string() : "nullptr");
-            logger->critical("Playerlist: Player not found");
-            throw std::logic_error("Player not found");
-        }
+        if (!it)
+            throw std::logic_error { "Player not found" };
         return static_cast<Player&>(*it);
     }
     auto at(Role role, Participant_ptr participant = nullptr) const
@@ -106,10 +122,8 @@ public:
     }
     auto insert(Player&& player)
     {
-        if (std::ranges::find(players, player) != players.end()) {
-            logger->critical("Player already in list");
-            throw std::logic_error("Player already in list");
-        }
+        if (std::ranges::find(players, player) != players.end())
+            throw PlayerExistException { "Player already in list" };
         if (player.role == Role::NONE) {
             if (contains(Role::BLACK)) {
                 logger->info("role black occupied, so guess role: white");
@@ -117,17 +131,13 @@ public:
             } else if (contains(Role::WHITE)) {
                 logger->info("role white occupied, so guess role: black");
                 player.role = Role::BLACK;
-            } else {
-                logger->critical("PlayerList::insert: No role for player");
-                throw std::logic_error("No role for player");
-            }
+            } else
+                throw PlayerListFullException { "No role for player" };
         }
-        if (contains(player.role)) {
-            logger->critical("Insert player: {} role already occupied", player.role.to_string());
-            throw std::logic_error("Role already occupied");
-        }
+        if (contains(player.role))
+            throw RoleOccupiedException { "Role already occupied" };
 
-        logger->info("Insert player: participant:{}, name:{}, role:{}, type:{},", player.participant->to_string(), player.name, player.role.to_string(), (int)player.type);
+        logger->info("Insert player: {}", player.to_string());
         players.push_back(std::move(player));
     }
     auto size() const
@@ -154,11 +164,11 @@ public:
         Contest::WinType win_type;
         bool confirmed;
     };
-    class StonePositionitionOccupiedException : public std::logic_error {
-        using std::logic_error::logic_error;
-    };
     class TimeLimitExceededException : public std::runtime_error {
         using runtime_error::runtime_error;
+    };
+    class StatusError : public std::logic_error {
+        using std::logic_error::logic_error;
     };
 
     bool should_giveup {};
@@ -190,19 +200,15 @@ public:
     }
     void reject()
     {
-        if (status != Status::NOT_PREPARED) {
-            logger->critical("Reject: Contest stautus is {}", std::to_underlying(status));
-            throw std::logic_error("Contest already started");
-        }
+        if (status != Status::NOT_PREPARED)
+            throw StatusError { "Contest already started" };
         players = {};
     }
 
     void enroll(Player&& player)
     {
-        if (status != Status::NOT_PREPARED) {
-            logger->critical("Enroll Player: Contest stautus is {}", std::to_underlying(status));
-            throw std::logic_error("Contest already started");
-        }
+        if (status != Status::NOT_PREPARED)
+            throw StatusError { "Contest already started" };
         players.insert(std::move(player));
         if (players.contains(Role::BLACK) && players.contains(Role::WHITE)) {
             status = Status::ON_GOING;
@@ -212,19 +218,16 @@ public:
 
     void play(Player player, Position pos)
     {
-        if (status != Status::ON_GOING) {
-            logger->critical("Play: Contest stautus is {}", std::to_underlying(status));
-            throw std::logic_error("Contest not started");
-        }
-        if (current.role != player.role) {
-            logger->critical("Play: In {}'s turn", current.role.to_string());
-            throw std::logic_error(player.name + " not allowed to play");
-        }
+        if (status != Status::ON_GOING)
+            throw StatusError { "Contest not started" };
+        if (current.role != player.role)
+            throw std::logic_error { player.name + " not allowed to play" };
         if (current.board[pos]) {
-            logger->critical("Play: positon ({},{}) is occupied", pos.x, pos.y);
-            throw StonePositionitionOccupiedException("Stone positionition occupied");
+            status = Status::GAME_OVER;
+            result = { -player.role, WinType::SUICIDE };
+            logger->warn("Play on occupied position {}, playerdata: {}", pos.to_string(), player.to_string());
+            return;
         }
-        std::cout << "contest play " << pos.x << ", " << pos.y << std::endl;
         logger->info("contest play " + std::to_string(pos.x) + ", " + std::to_string(pos.y));
         current = current.next_state(pos);
         moves.push_back(pos);
@@ -240,14 +243,10 @@ public:
 
     void concede(Player player)
     {
-        if (status != Status::ON_GOING) {
-            logger->critical("Concede: Contest status is {}", std::to_underlying(status));
-            throw std::logic_error("Contest not started");
-        }
-        if (players.at(current.role) != player) {
-            logger->critical("Concede: In {}'s turn", current.role.to_string());
-            throw std::logic_error(player.name + " not allowed to concede");
-        }
+        if (status != Status::ON_GOING)
+            throw StatusError { "Contest not started" };
+        if (players.at(current.role) != player)
+            throw std::logic_error { player.name + " not allowed to concede" };
         status = Status::GAME_OVER;
         result = { -player.role, WinType::GIVEUP };
         end_time = std::chrono::system_clock::now();
@@ -255,14 +254,10 @@ public:
 
     void timeout(Player player)
     {
-        if (status != Status::ON_GOING) {
-            logger->critical("Overtime: Contest status is {}", std::to_underlying(status));
-            throw std::logic_error("Contest not started");
-        }
-        if (players.at(current.role) != player) {
-            logger->critical("Overtime: In {}'s turn", current.role.to_string());
-            throw std::logic_error("not in " + player.name + "'s turn");
-        }
+        if (status != Status::ON_GOING)
+            throw StatusError { "Contest not started" };
+        if (players.at(current.role) != player)
+            throw std::logic_error { "not in " + player.name + "'s turn" };
         status = Status::GAME_OVER;
         result = { -player.role, WinType::TIMEOUT };
         end_time = std::chrono::system_clock::now();
