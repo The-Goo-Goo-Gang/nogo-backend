@@ -145,6 +145,7 @@ const vector<vector<string>> send_msgs1 {
     { R"({"op":200002,"data1":"B2","data2":"1683446067123"})" },
 
     {},
+    {}
 };
 const vector<vector<string>> send_msgs2 {
     { R"({"op":200000,"data1":"Player2","data2":"w"})" },
@@ -154,6 +155,7 @@ const vector<vector<string>> send_msgs2 {
     { R"({"op":200002,"data1":"B1","data2":"1683446068123"})" },
 
     { R"({"op":200005,"data1":"","data2":""})" },
+    { R"({"op":200007,"data1":"","data2":""})" }
 };
 
 const vector<vector<string>> recv_msgs1 {
@@ -173,6 +175,8 @@ const vector<vector<string>> recv_msgs1 {
 
     {},
     { R"({"data1":"{TIMEOUT}","data2":"{\"game\":{\"chessboard\":[[1,-1,0,0,0,0,0,0,0],[-1,1,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0]],\"disabled_positions\":[{\"x\":0,\"y\":2},{\"x\":2,\"y\":0}],\"end_time\":{TIMEOUT},\"last_move\":{\"x\":1,\"y\":0},\"metadata\":{\"player_opposing\":{\"avatar\":\"\",\"chess_type\":-1,\"name\":\"Player2\",\"type\":0},\"player_our\":{\"avatar\":\"\",\"chess_type\":1,\"name\":\"Player1\",\"type\":0},\"size\":9,\"turn_timeout\":30},\"move_count\":4,\"now_playing\":1,\"start_time\":{TIMEOUT},\"statistics\":[]},\"game_result\":{\"win_type\":2,\"winner\":1},\"is_gaming\":false,\"status\":2}","op":100001})" },
+    {},
+    { R"({"data1":"Player2","data2":"","op":200007})" },
 };
 const vector<vector<string>> recv_msgs2 {
     {},
@@ -185,6 +189,8 @@ const vector<vector<string>> recv_msgs2 {
     { R"({"data1":"B2","data2":"1683446067123","op":200002})" },
     { R"({"data1":"","data2":"","op":200005})" },
 
+    {},
+    {},
     {},
     {},
 };
@@ -274,7 +280,6 @@ TEST(nogo, server)
             EXPECT_TRUE(match) << "message not match in round " << i + 1 << "!\nreceived message: " << msg << "\nexpected message: " << expect;
         }
     }
-    // TODO: Send LEAVE_OP
 }
 int main(int argc, char* argv[])
 {
