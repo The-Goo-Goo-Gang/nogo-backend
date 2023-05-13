@@ -100,7 +100,6 @@ class Room {
 
     auto receive_participant_name(Participant_ptr participant, std::string_view name)
     {
-
         auto new_name { name };
 
         if (!Player::is_valid_name(new_name)) {
@@ -241,8 +240,8 @@ public:
 
             Player player, opponent;
             try {
-                player = Player { contest.players.at(role, participant) };
-                opponent = Player { contest.players.at(-player.role) };
+                player = contest.players.at(role, participant);
+                opponent = contest.players.at(-player.role);
             } catch (std::exception& e) {
                 logger->error("Ignore move: {}, playerlist: {}, try to find role {}, participant {}",
                     e.what(), contest.players.to_string(), role.to_string(), participant->to_string());
@@ -354,28 +353,10 @@ public:
                 contest.clear();
             }
 
+            // TODO: warn if invalid name
             auto name { receive_participant_name(participant, data1) };
             Role role { data2 };
 
-            if (!Player::is_valid_name(name)) {
-                name = "Player" + std::to_string(contest.players.size() + 1);
-                logger->warn("READY_OP: invalid name {}, use default name: {}", data1, name);
-            }
-            participant->set_name(name);
-            auto player_type { participant->is_local
-                    ? PlayerType::LOCAL_HUMAN_PLAYER
-                    : PlayerType::REMOTE_HUMAN_PLAYER };
-            Player player { participant, name, role, player_type };
-            try {
-                contest.enroll(std::move(player));
-            } catch (Contest::StatusError& e) {
-                logger->error("Ignore enroll player: Contest status is {}", e.what(), std::to_underlying(contest.status));
-                break;
-            } catch (std::exception& e) {
-                logger->error("Ignore enroll Player: {}, player: {}. playerlist: {}.",
-                    e.what(), player.to_string(), contest.players.to_string());
-                break;
-            }
             if (participant->is_local) {
                 // READY_OP should not be sent by local
                 throw std::logic_error("READY_OP should not be sent by local");
@@ -384,6 +365,7 @@ public:
                     deliver_to_local({ OpCode::RECEIVE_REQUEST_RESULT_OP, "accepted", name });
                     // contest accepted, enroll players
                     enroll_players(my_request.value());
+                    // TODO: catch exceptions when enrolling players
                     my_request = std::nullopt;
                     reject_all_received_requests();
                 } else {
@@ -463,14 +445,15 @@ public:
             break;
         }
         case OpCode::GIVEUP_OP: {
-            Role role { participant->is_local ? Role(data1) : Role::NONE };
+            // ignore data1(username)
+            // TODO: data2(greeting)
             Player player, opponent;
             try {
-                player = Player { contest.players.at(role, participant) };
-                opponent = Player { contest.players.at(-player.role) };
+                player = contest.players.at(Role::NONE, participant);
+                opponent = contest.players.at(-player.role);
             } catch (std::exception& e) {
-                logger->error("Ignore give up: {}, playerlist: {}, try to find role {}, participant {}",
-                    e.what(), contest.players.to_string(), role.to_string(), participant->to_string());
+                logger->error("Ignore give up: {}, playerlist: {}, try to find participant {}",
+                    e.what(), contest.players.to_string(), participant->to_string());
                 break;
             }
 
@@ -487,8 +470,6 @@ public:
                 logger->error("Concede: In {}'s turn, {}", contest.current.role.to_string(), e.what());
                 break;
             }
-            opponent.participant->deliver({ OpCode::WIN_PENDING_OP, std::to_string(std::to_underlying(Contest::WinType::GIVEUP)) });
-            participant->deliver({ OpCode::GIVEUP_END_OP });
             timer_cancelled_ = true;
             timer_.cancel();
 
