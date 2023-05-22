@@ -6,13 +6,6 @@
 #include <thread>
 #include <vector>
 
-#ifdef _WIN32
-size_t operator"" uZ(unsigned long long val)
-{
-    return { val };
-}
-#endif
-
 using std::string;
 using std::string_view;
 using std::vector;
