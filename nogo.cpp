@@ -8,6 +8,7 @@
 #include "contest.hpp"
 #include "log.hpp"
 #include "network.hpp"
+#include "utility.hpp"
 
 auto main(int argc, char* argv[]) -> int
 {
@@ -20,7 +21,7 @@ auto main(int argc, char* argv[]) -> int
         return 1;
     }
     auto ports = std::ranges::subrange(argv + 1, argv + argc)
-        | std::views::transform([](auto s) -> unsigned short { return std::atoi(s); })
+        | std::views::transform([](auto s){ return integer_cast<unsigned short>(s); })
         | ranges::to<std::vector>();
     launch_server(ports);
 }

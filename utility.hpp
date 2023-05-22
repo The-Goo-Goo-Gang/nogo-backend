@@ -24,11 +24,18 @@ constexpr inline auto integer_cast(std::string_view str)
         return result;
     };
 }
-constexpr auto stoi(std::string_view str)
+constexpr inline auto stoi(std::string_view str)
 {
     return integer_cast<int>(str);
 }
-constexpr auto stoull(std::string_view str)
+constexpr inline auto stoull(std::string_view str)
 {
     return integer_cast<unsigned long long>(str);
 }
+
+#ifdef _WIN32
+constexpr inline auto operator"" uZ(unsigned long long val) -> size_t
+{
+    return val;
+}
+#endif
