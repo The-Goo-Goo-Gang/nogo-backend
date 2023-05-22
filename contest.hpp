@@ -16,31 +16,8 @@ using asio::ip::tcp;
 #include "rule.hpp"
 #include "utility.hpp"
 
-class Participant {
-public:
-    bool is_local {};
-    Participant() = default;
-    Participant(bool is_local)
-        : is_local(is_local)
-    {
-    }
-    virtual ~Participant()
-    {
-    }
-    virtual std::string_view get_name() const = 0;
-    virtual void set_name(std::string_view name) = 0;
-    virtual tcp::endpoint endpoint() const = 0;
-    virtual void deliver(Message msg) = 0;
-    virtual void stop() = 0;
-    virtual bool operator==(const Participant&) const = 0;
-
-    auto to_string() const
-    {
-        return endpoint().address().to_string() + ":" + std::to_string(endpoint().port());
-    }
-};
-
-_EXPORT using Participant_ptr = std::shared_ptr<Participant>;
+class Participant;
+using Participant_ptr = std::shared_ptr<Participant>;
 
 _EXPORT struct Player {
     Participant_ptr participant;
@@ -66,10 +43,10 @@ _EXPORT struct Player {
     {
         return !name.empty() && std::ranges::all_of(name, [](auto c) { return std::isalnum(c) || c == '_'; });
     }
-    auto to_string() const
+    friend std::ostream& operator<<(std::ostream& os, const Player& player)
     {
-        return fmt::format("ip:{}, name:{}, role:{}, type:{}",
-            participant->to_string(), name, role.to_string(), std::to_underlying(type));
+        return os << fmt::format("ip:{}, name:{}, role:{}, type:{}",
+                   to_string(player.participant), player.name, player.role.to_string(), std::to_underlying(player.type));
     }
 };
 
@@ -88,37 +65,36 @@ public:
     };
     auto to_string() const
     {
-        return players | ranges::views::transform([](auto& p) { return p.to_string(); })
+        return players | ranges::views::transform([](auto& p) { return ::to_string(p); })
             | ranges::views::join_with(';') | ranges::to<std::string>();
     }
-    auto find(Role role, Participant_ptr participant = nullptr)
+    auto find(Role role)
     {
-        // If the criteria is valid, the player must match it
         auto it = std::ranges::find_if(players, [&](auto& p) {
-            return (!role || p.role == role) && (!participant || p.participant == participant);
+            return p.role == role;
         });
         return it == players.end() ? nullptr : std::addressof(*it);
     }
-    auto find(Role role, Participant_ptr participant = nullptr) const
+    auto find(Role role) const
     {
-        return static_cast<const Player*>(const_cast<PlayerList*>(this)->find(role, participant));
+        return static_cast<const Player*>(const_cast<PlayerList*>(this)->find(role));
     }
 
-    auto at(Role role, Participant_ptr participant = nullptr) -> Player&
+    auto at(Role role) -> Player&
     {
-        auto it = find(role, participant);
+        auto it = find(role);
         if (!it)
             throw std::logic_error { "Player not found" };
         return static_cast<Player&>(*it);
     }
-    auto at(Role role, Participant_ptr participant = nullptr) const
+    auto at(Role role) const
     {
-        return static_cast<const Player&>(const_cast<PlayerList*>(this)->at(role, participant));
+        return static_cast<const Player&>(const_cast<PlayerList*>(this)->at(role));
     }
 
-    auto contains(Role role, Participant_ptr participant = nullptr) const
+    auto contains(Role role) const
     {
-        return find(role, participant) != nullptr;
+        return find(role) != nullptr;
     }
     auto insert(Player&& player)
     {
@@ -137,7 +113,7 @@ public:
         if (contains(player.role))
             throw RoleOccupiedException { "Role already occupied" };
 
-        logger->info("Insert player: {}", player.to_string());
+        logger->info("Insert player: {}", ::to_string(player));
         players.push_back(std::move(player));
     }
     auto size() const
@@ -225,7 +201,7 @@ public:
         if (current.board[pos]) {
             status = Status::GAME_OVER;
             result = { -player.role, WinType::SUICIDE };
-            logger->warn("Play on occupied position {}, playerdata: {}", pos.to_string(), player.to_string());
+            logger->warn("Play on occupied position {}, playerdata: {}", pos.to_string(), to_string(player));
             return;
         }
         logger->info("contest play " + std::to_string(pos.x) + ", " + std::to_string(pos.y));

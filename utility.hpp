@@ -33,6 +33,22 @@ constexpr inline auto stoull(std::string_view str)
     return integer_cast<unsigned long long>(str);
 }
 
+#include <sstream>
+template <typename T>
+constexpr inline auto lexical_cast(const auto& v) -> T
+{
+    std::stringstream ss;
+    T r;
+    ss << v;
+    ss >> r;
+    return r;
+}
+
+constexpr inline auto to_string(const auto& v)
+{
+    return lexical_cast<std::string>(v);
+}
+
 #ifdef _WIN32
 constexpr inline auto operator"" uZ(unsigned long long val) -> size_t
 {
