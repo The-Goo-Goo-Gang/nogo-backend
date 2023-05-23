@@ -84,6 +84,7 @@ public:
             return name == participant.name;
         return endpoint() == participant.endpoint();
     }
+    void process_game_over();
 
     friend std::ostream& operator<<(std::ostream& os, const Participant& participant)
     {
@@ -121,7 +122,11 @@ public:
     {
         throw std::logic_error { "UPDATE_UI_STATE_OP is deprecated" };
     }
-    virtual void local_game_timeout(string_view, string_view) = 0;
+    void local_game_timeout(string_view, string_view)
+    {
+        throw std::logic_error { "LOCAL_GAME_TIMEOUT_OP is deprecated" };
+    }
+
     virtual void local_game_move(string_view, string_view) = 0;
     virtual void connect_to_remote(string_view, string_view) = 0;
     void connect_result(string_view, string_view)
@@ -241,7 +246,6 @@ public:
             r.sender->deliver({ OpCode::REJECT_OP, r.receiver->name });
         }
     }
-    void process_game_over();
 
 public:
     Room(asio::io_context& io_context)
@@ -387,7 +391,7 @@ public:
     {
         logger->debug("close_except: participants.size() = {}", participants.size());
 
-        ranges::erase_if(participants, [&](auto p) { return p != participant; });
+        std::erase_if(participants, [&](auto p) { return p != participant; });
 
         logger->debug("close_except: close {}", ::to_string(participant->endpoint()));
         logger->debug("close_except: send LEAVE_OP");
@@ -412,7 +416,7 @@ public:
     void clear()
     {
         // TODO: only keep local session
-        ranges::erase_if(participants, [](auto p) { return !p->is_local; });
+        erase_if(participants, [](auto p) { return !p->is_local; });
     }
 
     bool timer_cancelled {};
@@ -615,7 +619,7 @@ public:
                 if (!ec && !timer_cancelled) {
                     contest.timeout(opponent);
                     if (contest.status == Contest::Status::GAME_OVER)
-                        process_game_over();
+                        this->process_game_over();
                     room.deliver_ui_state();
                 }
             });
@@ -700,10 +704,7 @@ public:
     {
         throw std::logic_error { "Remote participant should not start local game" };
     }
-    void local_game_timeout(string_view, string_view) override
-    {
-        throw std::logic_error { "Remote participant should not start local game" };
-    }
+    // local_game_timeout
     void local_game_move(string_view, string_view) override
     {
         throw std::logic_error { "Remote participant should not start local game" };
@@ -758,8 +759,8 @@ public:
 
 class LocalSession : public Participant {
 public:
-    LocalSession(Room& room, tcp::socket socket, string name)
-        : Participant(room, std::move(socket), name)
+    LocalSession(tcp::socket socket, Room& room, string name)
+        : Participant(std::move(socket), room, name)
     {
         this->is_local = true;
     }
@@ -785,7 +786,7 @@ public:
     {
         throw std::logic_error("MOVE_OP should not be sent by local");
     }
-    void giveup(string_view data1, string_view)
+    void giveup(string_view data1, string_view data2)
     {
         auto& contest { room.contest };
         // ignore data1(username)
@@ -800,7 +801,7 @@ public:
         }
 
         if (is_local) {
-            room.deliver_to_others({ OpCode::GIVEUP_OP, std::to_string(std::to_underlying(player.role)) });, shared_from_this()); // broadcast
+            room.deliver_to_others({ OpCode::GIVEUP_OP, data1, data2 }, shared_from_this()); // broadcast
         }
 
         try {
@@ -909,7 +910,7 @@ public:
     {
         asio::error_code ec;
         tcp::endpoint endpoint { asio::ip::make_address(data1), integer_cast<asio::ip::port_type>(data2) };
-        start_session(room.io_context, room, endpoint);
+        start_session(room.io_context, room, ec, endpoint);
         if (ec) {
             logger->error("start_session failed: {}", ec.message());
             deliver({ OpCode::CONNECT_RESULT_OP, "failed", ec.message() });
@@ -935,7 +936,7 @@ public:
     }
     void chat_send_broadcast_message(string_view data1, string_view) override
     {
-        room.deliver_to_others({ OpCode::CHAT_OP, data1 }, *this);
+        room.deliver_to_others({ OpCode::CHAT_OP, data1 }, shared_from_this());
     }
     // chat_receive_message
     void chat_username_update(string_view, string_view) override
@@ -984,7 +985,7 @@ public:
         auto receiver { ps[0] };
         ContestRequest request { shared_from_this(), receiver, Role { data2 } };
         my_request = request;
-        receiver->deliver({ OpCode::READY_OP, participant->name, data2 });
+        receiver->deliver({ OpCode::READY_OP, name, data2 });
     }
     void receive_request(string_view, string_view) override
     {
@@ -1032,7 +1033,7 @@ void start_session(asio::io_context& io_context, Room& room, asio::error_code& e
     tcp::socket socket { io_context };
     socket.connect(endpoint, ec);
     if (!ec)
-        std::make_shared<RemoteSession>(std::move(socket), room, false)->start();
+        std::make_shared<RemoteSession>(std::move(socket), room, "")->start();
 }
 
 template <bool is_local>
