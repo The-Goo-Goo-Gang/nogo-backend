@@ -627,14 +627,30 @@ public:
     }
     void giveup(string_view data1, string_view data2) override
     {
+        // ignore data1(username)
+        // TODO: data2(greeting)
         auto& contest { room.contest };
         Role role { data1 };
         auto player { this->player };
-        auto opponent { contest.players.at(-player.role) };
+        try {
+            auto opponent { contest.players.at(-player.role) };
+        } catch (std::exception& e) {
+            logger->error("Ignore give up: {}, playerlist: {}, try to find participant {}",
+                e.what(), contest.players.to_string(), ::to_string(shared_from_this()));
+            return;
+        }
 
         room.deliver_to_others({ OpCode::GIVEUP_OP, data1, data2 }, shared_from_this()); // broadcast
 
-        contest.concede(player);
+        try {
+            contest.concede(player);
+        } catch (Contest::StatusError& e) {
+            logger->error("Ignore concede: {}, Contest status is {}", e.what(), std::to_underlying(contest.status));
+            return;
+        } catch (std::logic_error& e) {
+            logger->error("Concede: In {}'s turn, {}", contest.current.role.to_string(), e.what());
+            return;
+        }
         room.timer_cancelled = true;
         room.timer.cancel();
         if (contest.status == Contest::Status::GAME_OVER)
@@ -668,6 +684,7 @@ public:
                 contest.confirm();
                 // reply same GG_OP to confirm
                 deliver({ gg_op, std::to_string(std::to_underlying(contest.result.win_type)) });
+                // TODO: message format?
             } else {
                 // result is not valid, do nothing
             }
@@ -881,7 +898,7 @@ public:
             opponent = contest.players.at(-player.role);
         } catch (std::exception& e) {
             logger->error("Ignore move: {}, playerlist: {}, try to find role {}, participant {}",
-                e.what(), contest.players.to_string(), role.to_string(), ::to_string(*this));
+                e.what(), contest.players.to_string(), role.to_string(), ::to_string(shared_from_this()));
             return;
         }
 
