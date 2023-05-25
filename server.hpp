@@ -70,7 +70,7 @@ public:
         : room(room)
         , socket(std::move(socket))
         , timer(socket.get_executor())
-        , name(!name.empty() ? name : ::to_string(this->endpoint()))
+        , name(name)
     {
         timer.expires_at(std::chrono::steady_clock::time_point::max());
     }
@@ -343,7 +343,6 @@ public:
             participant->receive_request_result(data1, data2);
             break;
         }
-        deliver_ui_state();
     }
     void join(Participant_ptr participant)
     {
@@ -509,7 +508,7 @@ void start_session(asio::io_context& io_context, Room& room, asio::error_code& e
 class RemoteSession : public Participant {
 public:
     RemoteSession(tcp::socket socket, Room& room, string name)
-        : Participant(std::move(socket), room, name)
+        : Participant(std::move(socket), room, ::to_string(socket.remote_endpoint()))
     {
         logger->debug("RemoteSession: {}", ::to_string(*this));
         this->is_local = false;
@@ -777,7 +776,7 @@ public:
 class LocalSession : public Participant {
 public:
     LocalSession(tcp::socket socket, Room& room, string name)
-        : Participant(std::move(socket), room, name)
+        : Participant(std::move(socket), room, ::to_string(socket.local_endpoint()))
     {
         this->is_local = true;
     }
