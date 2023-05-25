@@ -261,24 +261,30 @@ public:
         switch (msg.op) {
         case OpCode::READY_OP:
             participant->ready(data1, data2);
+            deliver_ui_state();
             break;
         case OpCode::REJECT_OP:
             participant->reject(data1, data2);
             break;
         case OpCode::MOVE_OP:
             participant->move(data1, data2);
+            deliver_ui_state();
             break;
         case OpCode::GIVEUP_OP:
             participant->giveup(data1, data2);
+            deliver_ui_state();
             break;
         case OpCode::TIMEOUT_END_OP:
             participant->timeout_end(data1, data2);
+            deliver_ui_state();
             break;
         case OpCode::SUICIDE_END_OP:
             participant->suicide_end(data1, data2);
+            deliver_ui_state();
             break;
         case OpCode::GIVEUP_END_OP:
             participant->giveup_end(data1, data2);
+            deliver_ui_state();
             break;
         case OpCode::LEAVE_OP:
             participant->leave(data1, data2);
@@ -289,6 +295,7 @@ public:
         // -------- Extend OpCode --------
         case OpCode::START_LOCAL_GAME_OP:
             participant->start_local_game(data1, data2);
+            deliver_ui_state();
             break;
         case OpCode::UPDATE_UI_STATE_OP:
             participant->update_ui_state(data1, data2);
@@ -296,6 +303,7 @@ public:
         // OpCode::LOCAL_GAME_TIMEOUT_OP:
         case OpCode::LOCAL_GAME_MOVE_OP:
             participant->local_game_move(data1, data2);
+            deliver_ui_state();
             break;
         case OpCode::CONNECT_TO_REMOTE_OP:
             participant->connect_to_remote(data1, data2);
@@ -335,6 +343,7 @@ public:
             break;
         case OpCode::ACCEPT_REQUEST_OP:
             participant->accept_request(data1, data2);
+            deliver_ui_state();
             break;
         case OpCode::REJECT_REQUEST_OP:
             participant->reject_request(data1, data2);
