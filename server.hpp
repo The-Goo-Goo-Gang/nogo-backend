@@ -715,6 +715,8 @@ public:
     }
     void leave(string_view, string_view) override
     {
+        room.leave(shared_from_this());
+        deliver({ OpCode::LEAVE_OP });
     }
     void chat(string_view data1, string_view) override
     {
@@ -966,6 +968,7 @@ public:
     // chat_receive_message
     void chat_username_update(string_view, string_view) override
     {
+        
     }
 
     void update_username(string_view data1, string_view)
