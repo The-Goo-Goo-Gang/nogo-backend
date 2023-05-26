@@ -46,7 +46,7 @@ _EXPORT struct Player {
     friend std::ostream& operator<<(std::ostream& os, const Player& player)
     {
         return os << fmt::format("ip:{}, name:{}, role:{}, type:{}",
-                   to_string(player.participant), player.name, player.role.to_string(), std::to_underlying(player.type));
+                   to_string(*player.participant), player.name, player.role.to_string(), std::to_underlying(player.type));
     }
 };
 

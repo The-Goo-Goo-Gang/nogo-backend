@@ -220,15 +220,14 @@ TEST(nogo, server)
         } catch (const std::exception& e) {
             FAIL() << e.what();
         }
-        fmt::print("\033[31mrecv_msg1: {}\033[0m\n", recv_msg1);
+        // fmt::print("\033[31mrecv_msg1: {}\033[0m\n", recv_msg1);
 
         try {
             recv_msg2 = c2->do_read(recv_msgs2[i].size());
         } catch (const std::exception& e) {
             FAIL() << e.what();
         }
-
-        fmt::print("\033[32mrecv_msg2: {}\033[0m\n", recv_msg2);
+        // fmt::print("\033[32mrecv_msg2: {}\033[0m\n", recv_msg2);
 
         constexpr string_view placeholder = "{TIMEOUT}";
         constexpr auto timestamp_len = 13;

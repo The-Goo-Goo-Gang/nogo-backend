@@ -109,7 +109,7 @@ public:
 
     virtual void ready(string_view, string_view) = 0;
     virtual void reject(string_view, string_view) = 0;
-    virtual void move(string_view, string_view) = 0;
+    void move(string_view, string_view);
     virtual void giveup(string_view, string_view) = 0;
     virtual void giveup_end(string_view, string_view) = 0;
     virtual void timeout_end(string_view, string_view) = 0;
@@ -233,6 +233,7 @@ public:
     {
         Player player1 { request.sender, request.sender->name, request.role, request.sender->is_local ? PlayerType::LOCAL_HUMAN_PLAYER : PlayerType::REMOTE_HUMAN_PLAYER },
             player2 { request.receiver, request.receiver->name, -request.role, request.receiver->is_local ? PlayerType::LOCAL_HUMAN_PLAYER : PlayerType::REMOTE_HUMAN_PLAYER };
+        request.sender->player = player1, request.receiver->player = player2;
         contest.enroll(std::move(player1)), contest.enroll(std::move(player2));
         contest.local_role = request.sender->is_local ? request.role : -request.role;
         contest.duration = TIMEOUT;
@@ -433,6 +434,62 @@ public:
     asio::io_context& io_context;
 };
 
+void Participant::move(string_view data1, string_view data2)
+{
+    auto& contest { room.contest };
+    auto& timer { room.timer };
+    auto& timer_cancelled { room.timer_cancelled };
+    timer_cancelled = true;
+    timer.cancel();
+    std::cout << "timer canceled" << std::endl;
+
+    Position pos { data1 };
+    try {
+        milliseconds ms { stoull(data2) };
+    } catch (std::exception& e) {
+        // TODO:
+    }
+
+    // TODO: adjust time
+
+    Player player { this->player }, opponent;
+    try {
+        opponent = contest.players.at(-player.role);
+    } catch (std::exception& e) {
+        logger->error("Ignore move: {}, playerlist: {}, try to find participant {}",
+            e.what(), contest.players.to_string(), ::to_string(*this));
+        return;
+    }
+
+    try {
+        contest.play(player, pos);
+    } catch (Contest::StatusError& e) {
+        logger->error("Ignore move: {}, Contest status is {}", e.what(), std::to_underlying(contest.status));
+        return;
+    } catch (std::exception& e) {
+        logger->error("Ignore move: {}, player:{}", e.what(), ::to_string(player));
+        return;
+    }
+
+    room.deliver_to_others({ OpCode::MOVE_OP, data1, data2 }, shared_from_this()); // broadcast
+    if (contest.status == Contest::Status::GAME_OVER)
+        process_game_over();
+
+    if (contest.status == Contest::Status::ON_GOING) {
+        contest.duration = TIMEOUT;
+        timer_cancelled = false;
+        timer.expires_after(contest.duration);
+        timer.async_wait([&](const asio::error_code& ec) {
+            if (!ec && !timer_cancelled) {
+                contest.timeout(opponent);
+                if (contest.status == Contest::Status::GAME_OVER)
+                    this->process_game_over();
+                room.deliver_ui_state();
+            }
+        });
+    }
+}
+
 awaitable<void> Participant::reader()
 {
     asio::streambuf buffer;
@@ -578,61 +635,7 @@ public:
             my_request = std::nullopt;
         }
     }
-    void move(string_view data1, string_view data2) override
-    {
-        auto& contest { room.contest };
-        auto& timer { room.timer };
-        auto& timer_cancelled { room.timer_cancelled };
-        timer_cancelled = true;
-        timer.cancel();
-        std::cout << "timer canceled" << std::endl;
-
-        Position pos { data1 };
-        try {
-            milliseconds ms { stoull(data2) };
-        } catch (std::exception& e) {
-            // TODO:
-        }
-
-        // TODO: adjust time
-
-        Player player { this->player }, opponent;
-        try {
-            opponent = contest.players.at(-player.role);
-        } catch (std::exception& e) {
-            logger->error("Ignore move: {}, playerlist: {}, try to find participant {}",
-                e.what(), contest.players.to_string(), ::to_string(*this));
-            return;
-        }
-
-        try {
-            contest.play(player, pos);
-        } catch (Contest::StatusError& e) {
-            logger->error("Ignore move: {}, Contest status is {}", e.what(), std::to_underlying(contest.status));
-            return;
-        } catch (std::exception& e) {
-            logger->error("Ignore move: {}, player:{}", e.what(), ::to_string(player));
-            return;
-        }
-
-        room.deliver_to_others({ OpCode::MOVE_OP, data1, data2 }, shared_from_this()); // broadcast
-        if (contest.status == Contest::Status::GAME_OVER)
-            process_game_over();
-
-        if (contest.status == Contest::Status::ON_GOING) {
-            contest.duration = TIMEOUT;
-            timer_cancelled = false;
-            timer.expires_after(contest.duration);
-            timer.async_wait([&](const asio::error_code& ec) {
-                if (!ec && !timer_cancelled) {
-                    contest.timeout(opponent);
-                    if (contest.status == Contest::Status::GAME_OVER)
-                        this->process_game_over();
-                    room.deliver_ui_state();
-                }
-            });
-        }
-    }
+    // move
     void giveup(string_view data1, string_view data2) override
     {
         // ignore data1(username)
@@ -809,10 +812,7 @@ public:
     {
         throw std::logic_error("REJECT_OP should not be sent by local");
     }
-    void move(string_view, string_view) override
-    {
-        
-    }
+    // move
     void giveup(string_view data1, string_view data2)
     {
         auto& contest { room.contest };
