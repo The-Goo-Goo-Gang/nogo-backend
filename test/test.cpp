@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <deque>
 #include <iostream>
+#include <ranges>
 #include <sstream>
 #include <string_view>
 #include <thread>
@@ -10,6 +11,7 @@ using std::string;
 using std::string_view;
 using std::vector;
 using namespace std::literals::chrono_literals;
+using namespace std::literals::string_view_literals;
 
 #include <asio.hpp>
 #include <asio/co_spawn.hpp>
@@ -172,9 +174,25 @@ const vector<vector<string>> recv_msgs2 {
     {},
 };
 
-#include <errno.h>
-#include <stdio.h>
-#include <stdlib.h>
+struct MessageFormat {
+    std::string format;
+    static constexpr auto placeholder { "{TIMESTAMP}"sv };
+    static constexpr auto timestamp_len { 13 };
+    MessageFormat(std::string_view format)
+        : format { format }
+    {
+    }
+    auto operator==(std::string_view message) const
+    {
+        auto message_it { message.begin() };
+        return std::ranges::all_of(std::ranges::views::split(format, placeholder), [&](auto format_part) {
+            bool match = std::equal(format_part.begin(), format_part.end(), message_it);
+            if (format_part.end() != format.end())
+                message_it += format_part.size() + timestamp_len;
+            return match;
+        }) && message_it == message.end();
+    }
+};
 
 TEST(nogo, server)
 {
@@ -202,7 +220,7 @@ TEST(nogo, server)
         } catch (const std::exception& e) {
             FAIL() << e.what();
         }
-        // fmt::print("\033[31mrecv_msg1: {}\033[0m\n", recv_msg1);
+        fmt::print("\033[31mrecv_msg1: {}\033[0m\n", recv_msg1);
 
         try {
             recv_msg2 = c2->do_read(recv_msgs2[i].size());
@@ -210,7 +228,7 @@ TEST(nogo, server)
             FAIL() << e.what();
         }
 
-        // fmt::print("\033[32mrecv_msg2: {}\033[0m\n", recv_msg2);
+        fmt::print("\033[32mrecv_msg2: {}\033[0m\n", recv_msg2);
 
         constexpr string_view placeholder = "{TIMEOUT}";
         constexpr auto timestamp_len = 13;
