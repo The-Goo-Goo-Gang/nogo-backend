@@ -46,8 +46,6 @@ using std::chrono::milliseconds;
 using std::chrono::seconds;
 using std::chrono::system_clock;
 
-constexpr auto TIMEOUT { 30s };
-
 class Room;
 
 class Participant : public std::enable_shared_from_this<Participant> {
@@ -236,7 +234,6 @@ public:
         request.sender->player = player1, request.receiver->player = player2;
         contest.enroll(std::move(player1)), contest.enroll(std::move(player2));
         contest.local_role = request.sender->is_local ? request.role : -request.role;
-        contest.duration = TIMEOUT;
     }
 
     void reject_all_received_requests()
@@ -601,7 +598,7 @@ public:
         auto& contest { this->room.contest };
 
         if (contest.status == Contest::Status::GAME_OVER) {
-            contest.clear();
+            contest = Contest {};
         }
 
         // TODO: warn if invalid name
@@ -611,8 +608,9 @@ public:
         if (my_request.has_value() && shared_from_this() == my_request->receiver) {
             room.deliver_to_local({ OpCode::RECEIVE_REQUEST_RESULT_OP, "accepted", name });
             // contest accepted, enroll players
-            room.enroll_players(my_request.value());
-            // TODO: catch exceptions when enrolling players
+            contest = Contest { PlayerList { this->player, my_request->sender->player } };
+            contest.local_role = request.sender->is_local ? request.role : -request.role;
+            // TODO: catch exceptions when enrolling playersmy_request
             my_request = std::nullopt;
             room.reject_all_received_requests();
         } else {
@@ -720,6 +718,7 @@ public:
     {
         room.leave(shared_from_this());
         deliver({ OpCode::LEAVE_OP });
+        // TODO: contest
     }
     void chat(string_view data1, string_view) override
     {
@@ -788,6 +787,8 @@ public:
 };
 
 class LocalSession : public Participant {
+    PlayerList local_players;
+
 public:
     LocalSession(tcp::socket socket, Room& room, string name)
         : Participant(std::move(socket), room, ::to_string(socket.local_endpoint()))
@@ -871,7 +872,7 @@ public:
         auto& contest { room.contest };
         std::cout << "start local game: timeout = " << data1 << ", size = " << data2 << std::endl;
         if (contest.status != Contest::Status::NOT_PREPARED) {
-            contest.clear();
+            contest = Contest {};
         }
         // int timeout = std::stoi(msg.data1);
         // int rank_n = std::stoi(msg.data2);
@@ -881,8 +882,9 @@ public:
 
         Player player1 { shared_from_this(), "BLACK", Role::BLACK, PlayerType::LOCAL_HUMAN_PLAYER },
             player2 { shared_from_this(), "WHITE", Role::WHITE, PlayerType::LOCAL_HUMAN_PLAYER };
+        local_players = { player1, player2 };
         try {
-            contest.enroll(std::move(player1)), contest.enroll(std::move(player2));
+            contest = Contest { local_players };
         } catch (Contest::StatusError& e) {
             logger->error("Ignore enroll player: {}, Contest status is {}", e.what(), std::to_underlying(contest.status));
             return;

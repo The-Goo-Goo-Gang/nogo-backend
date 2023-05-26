@@ -16,6 +16,9 @@ using asio::ip::tcp;
 #include "rule.hpp"
 #include "utility.hpp"
 
+using namespace std::chrono_literals;
+constexpr auto TIMEOUT { 30s };
+
 class Participant;
 using Participant_ptr = std::shared_ptr<Participant>;
 
@@ -155,16 +158,22 @@ public:
 
     Status status {};
     GameResult result {};
-    std::chrono::seconds duration;
+    std::chrono::seconds duration { TIMEOUT };
     std::chrono::system_clock::time_point start_time;
     std::chrono::system_clock::time_point end_time;
     Role local_role { Role::NONE };
 
+    Contest() = default;
+    Contest(PlayerList players)
+        : players(std::move(players))
+    {
+    }
+
     void clear()
+    // only keep players
     {
         current = {};
         moves.clear();
-        players = {};
         status = {};
         result = {};
         should_giveup = false;
