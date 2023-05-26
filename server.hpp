@@ -1018,16 +1018,9 @@ public:
     }
     void receive_request(string_view, string_view) override
     {
-        auto& received_requests { this->room.received_requests };
-        if (received_requests.empty()) {
-            throw std::logic_error { "received_requests.empty()" };
-        }
-        auto request = received_requests.front();
-        received_requests.pop();
-        room.reject_all_received_requests();
-        request.sender->deliver({ OpCode::READY_OP, request.receiver->name, (-request.role).map("b", "w", "") });
-        room.enroll_players(request);
+        throw std::logic_error { "receive_request" };
     }
+
     void accept_request(string_view, string_view) override
     {
         auto& received_requests { this->room.received_requests };
