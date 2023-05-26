@@ -141,8 +141,8 @@ const vector<vector<string>> recv_msgs1 {
     {},
     { R"({"data1":"Player2","data2":"w","op":100014})",
         R"({"data1":"{TIMEOUT}","data2":"{\"game\":null,\"game_result\":{\"win_type\":0,\"winner\":0},\"is_gaming\":false,\"status\":0}","op":100001})" },
-    { R"({"data1":"{TIMEOUT}","data2":"{\"game\":null,\"game_result\":{\"win_type\":0,\"winner\":0},\"is_gaming\":false,\"status\":0}","op":100001})" },
     { R"({"data1":"{TIMEOUT}","data2":"{\"game\":{\"chessboard\":[[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0]],\"disabled_positions\":[],\"end_time\":0,\"last_move\":null,\"metadata\":{\"player_opposing\":{\"avatar\":\"\",\"chess_type\":-1,\"name\":\"Player2\",\"type\":0},\"player_our\":{\"avatar\":\"\",\"chess_type\":1,\"name\":\"Player1\",\"type\":0},\"size\":9,\"turn_timeout\":30},\"move_count\":0,\"now_playing\":1,\"start_time\":{TIMEOUT},\"statistics\":[]},\"game_result\":{\"win_type\":0,\"winner\":0},\"is_gaming\":true,\"status\":1}","op":100001})" },
+    {},
 
     { R"({"data1":"{TIMEOUT}","data2":"{\"game\":{\"chessboard\":[[1,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0]],\"disabled_positions\":[],\"end_time\":0,\"last_move\":{\"x\":0,\"y\":0},\"metadata\":{\"player_opposing\":{\"avatar\":\"\",\"chess_type\":-1,\"name\":\"Player2\",\"type\":0},\"player_our\":{\"avatar\":\"\",\"chess_type\":1,\"name\":\"Player1\",\"type\":0},\"size\":9,\"turn_timeout\":30},\"move_count\":1,\"now_playing\":-1,\"start_time\":{TIMEOUT},\"statistics\":[]},\"game_result\":{\"win_type\":0,\"winner\":0},\"is_gaming\":true,\"status\":1}","op":100001})" },
     { R"({"data1":"A2","data2":"1683446066123","op":200002})",

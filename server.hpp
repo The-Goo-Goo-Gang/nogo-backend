@@ -212,9 +212,9 @@ public:
         }
 
         if (new_name != participant->name) {
-            if (!participant->is_local && !participant->name.empty() && new_name != participant->name)
+            if (!participant->is_local && !participant->name.empty() && participant->name != ::to_string(participant->endpoint()))
                 deliver_to_local({ OpCode::CHAT_USERNAME_UPDATE_OP, participant->name, new_name });
-            name = new_name;
+            participant->name = new_name;
         }
 
         return new_name;
@@ -811,7 +811,7 @@ public:
     }
     void move(string_view, string_view) override
     {
-        throw std::logic_error("MOVE_OP should not be sent by local");
+        
     }
     void giveup(string_view data1, string_view data2)
     {
@@ -968,7 +968,6 @@ public:
     // chat_receive_message
     void chat_username_update(string_view, string_view) override
     {
-        
     }
 
     void update_username(string_view data1, string_view)
