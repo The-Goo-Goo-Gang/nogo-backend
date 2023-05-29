@@ -963,6 +963,7 @@ public:
             logger->error("send_request failed: {}, participant not found", ::to_string(shared_from_this()));
             return;
         }
+        my_request = *participant;
         my_request->deliver({ OpCode::READY_OP, name, data2 });
     }
     void receive_request(string_view, string_view) override
