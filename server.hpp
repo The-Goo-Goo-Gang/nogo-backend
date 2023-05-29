@@ -259,10 +259,10 @@ public:
             if (contest.status != Contest::Status::NOT_PREPARED) {
                 contest.clear();
             }
-            // int timeout = std::stoi(msg.data1);
+            int timeout = stoi(data1);
             // int rank_n = std::stoi(msg.data2);
 
-            seconds duration { stoi(data1) };
+            seconds duration { timeout };
             contest.duration = duration;
 
             Player player1 { participant, "BLACK", Role::BLACK, PlayerType::LOCAL_HUMAN_PLAYER },
@@ -499,11 +499,12 @@ public:
             break;
         }
         case OpCode::GIVEUP_OP: {
-            // ignore data1(username)
+            // data1(role)
             // TODO: data2(greeting)
+            Role role { data1 };
             Player player, opponent;
             try {
-                player = contest.players.at(Role::NONE, participant);
+                player = contest.players.at(role, participant);
                 opponent = contest.players.at(-player.role);
             } catch (std::exception& e) {
                 logger->error("Ignore give up: {}, playerlist: {}, try to find participant {}",
