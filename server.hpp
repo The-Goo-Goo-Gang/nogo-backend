@@ -29,6 +29,7 @@
 #include <deque>
 #include <functional>
 #include <iostream>
+#include <mutex>
 #include <optional>
 #include <queue>
 #include <ranges>
@@ -86,6 +87,7 @@ class Room {
     std::deque<std::string> chats;
     std::optional<ContestRequest> my_request;
     std::queue<ContestRequest> received_requests;
+    std::mutex bot_mutex;
 
     Participant_ptr find_local_participant()
     {
@@ -106,7 +108,7 @@ class Room {
 
     auto do_move(Participant_ptr participant, Position pos, Role role = Role::NONE, bool is_local_game = false)
     {
-        logger->debug("do_move: participant = {}, pos = {}, role = {}, is_local_game = {}", participant->to_string(), pos.to_string(), role.map("b", "w", "-"), std::to_string(is_local_game));
+        logger->debug("do_move: pos = {}, role = {}, is_local_game = {}", pos.to_string(), role.map("b", "w", "-"), std::to_string(is_local_game));
         timer_cancelled_ = true;
         timer_.cancel();
 
@@ -115,8 +117,8 @@ class Room {
             player = Player { contest.players.at(role, participant) };
             opponent = Player { contest.players.at(-player.role) };
         } catch (std::exception& e) {
-            logger->error("Ignore move: {}, playerlist: {}, try to find participant {}",
-                e.what(), contest.players.to_string(), participant->to_string());
+            logger->error("Ignore move: {}, playerlist: {}, cannot find participant",
+                e.what(), contest.players.to_string());
             return false;
         }
 
@@ -167,7 +169,8 @@ class Room {
             return;
 
         std::cout << "check_bot: start bot" << std::endl;
-        auto bot = [this](const State& state, const Role& role = Role::NONE, const bool& is_local_game = false) {
+        auto bot = [&](const State& state, const Role& role = Role::NONE, const bool& is_local_game = false) {
+            std::lock_guard<std::mutex> guard(bot_mutex);
             std::cout << "bot start calcing move, role = " << role.map("b", "w", "") << std::endl;
             auto pos = mcts_bot_player(state);
             std::cout << "bot calced move: " << pos.to_string() << std::endl;
@@ -258,7 +261,8 @@ public:
 
         switch (msg.op) {
         case OpCode::BOT_HINT_OP: {
-            auto bot = [=](const State& state) {
+            auto bot = [&](const State& state) {
+                std::lock_guard<std::mutex> guard(bot_mutex);
                 auto pos = mcts_bot_player(state);
                 logger->info("bot calced move: {}", pos.to_string());
             };
