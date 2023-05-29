@@ -201,7 +201,9 @@ class Room {
             if (pos.has_value()) {
                 logger->info("bot finish calcing move, role = {}, pos = {}", role.map("b", "w", "-"), pos->to_string());
                 if (should_bot_move(participant, role)) {
-                    do_move(participant, pos.value(), role, is_local_game);
+                    if (do_move(participant, pos.value(), role, is_local_game)) {
+                        deliver_to_others({ OpCode::MOVE_OP, pos->to_string() }, participant);
+                    }
                 }
             } else {
                 logger->error("bot failed to calc move, role = {}", role.map("b", "w", "-"));
@@ -493,10 +495,6 @@ public:
         case OpCode::READY_OP: {
             logger->info("ready: is_local = {}, data1 = {}, data2 = {}", participant->is_local, data1, data2);
 
-            if (contest.status == Contest::Status::GAME_OVER) {
-                contest.clear();
-            }
-
             // TODO: warn if invalid name
             auto name { receive_participant_name(participant, data1) };
             Role role { data2 };
@@ -505,6 +503,10 @@ public:
                 // READY_OP should not be sent by local
                 throw std::logic_error("READY_OP should not be sent by local");
             } else {
+                if (contest.status == Contest::Status::ON_GOING) {
+                    participant->deliver({ OpCode::REJECT_OP, find_local_participant()->get_name(), "Contest already started" });
+                    return;
+                }
                 if (my_request.has_value() && participant == my_request->receiver) {
                     deliver_to_local({ OpCode::RECEIVE_REQUEST_RESULT_OP, "accepted", name });
                     // contest accepted, enroll players
@@ -630,7 +632,8 @@ public:
             }
             logger->debug("receive LEAVE_OP: process end");
 
-            contest.clear();
+            if (contest.players.contains(Role::NONE, participant))
+                contest.clear();
             break;
         }
         case OpCode::CHAT_OP: {
