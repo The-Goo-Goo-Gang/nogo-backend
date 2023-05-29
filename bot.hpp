@@ -138,4 +138,4 @@ _EXPORT constexpr auto mcts_bot_player_generator(double C)
     };
 }
 
-_EXPORT constexpr auto mcts_bot_player = mcts_bot_player_generator(0.2);
+_EXPORT constexpr auto mcts_bot_player = mcts_bot_player_generator(0.1);
