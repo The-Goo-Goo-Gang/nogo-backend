@@ -128,7 +128,6 @@ class Room {
             deliver_to_local({ OpCode::RECEIVE_REQUEST_OP, request.sender->get_name(), request.role.map("b", "w", "") });
         }
         received_requests.push(request);
-        deliver_ui_state();
     }
 
     void enroll_players(ContestRequest& request)
