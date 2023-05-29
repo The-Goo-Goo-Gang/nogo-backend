@@ -566,6 +566,8 @@ public:
         if (my_request == shared_from_this()) {
             room.deliver_to_local({ OpCode::RECEIVE_REQUEST_RESULT_OP, "accepted", name });
             // contest accepted, enroll players
+            logger->debug("contest accepted, enroll players");
+            logger->debug("role = {}, my_request->player.role = {}", int(role), int(my_request->player.role));
             contest = Contest { PlayerList { this->player, my_request->player } };
             contest.local_role = my_request->is_local ? my_request->player.role : -my_request->player.role;
             // TODO: catch exceptions when enrolling playersmy_request
@@ -983,6 +985,9 @@ public:
         participant->deliver({ OpCode::READY_OP, this->name, (-participant->player.role).map("b", "w", "") });
         // logger->info("accept_request: {} {}", ::to_string(request.sender->player), ::to_string(request.receiver->player));
         room.contest = Contest { { this->player, participant->player } };
+
+        logger->debug("contest accepted, enroll players");
+        logger->debug("role = {}, my_request->player.role = {}", int(this->player.role), int(participant->player.role));
         room.contest.local_role = participant->is_local ? participant->player.role : -participant->player.role;
     }
     void reject_request(string_view, string_view) override
