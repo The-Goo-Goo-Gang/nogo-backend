@@ -173,6 +173,7 @@ public:
         : players(std::move(players))
     {
         status = Status::ON_GOING;
+        start_time = std::chrono::system_clock::now();
     }
 
     void clear()

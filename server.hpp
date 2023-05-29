@@ -982,7 +982,8 @@ public:
         received_requests.pop_back();
         room.reject_all_received_requests(this->name);
 
-        participant->deliver({ OpCode::READY_OP, this->name, (-participant->player.role).map("b", "w", "") });
+        this->player = Player { shared_from_this(), this->name, -participant->player.role, PlayerType::LOCAL_HUMAN_PLAYER };
+        participant->deliver({ OpCode::READY_OP, this->name, player.role.map("b", "w", "") });
         // logger->info("accept_request: {} {}", ::to_string(request.sender->player), ::to_string(request.receiver->player));
         room.contest = Contest { { this->player, participant->player } };
 
