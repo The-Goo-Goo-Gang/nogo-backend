@@ -145,7 +145,7 @@ public:
     virtual void chat_username_update(string_view, string_view) = 0;
 
     virtual void update_username(string_view, string_view) = 0;
-    virtual void send_request(string_view, string_view) = 0;
+    virtual void send_request_by_ip(string_view, string_view) = 0;
     virtual void send_request_by_username(string_view, string_view) = 0;
     virtual void receive_request(string_view, string_view) = 0;
     virtual void accept_request(string_view, string_view) = 0;
@@ -296,8 +296,8 @@ public:
         case OpCode::UPDATE_USERNAME_OP:
             participant->update_username(data1, data2);
             break;
-        case OpCode::SEND_REQUEST_OP:
-            participant->send_request(data1, data2);
+        case OpCode::SEND_REQUEST_BY_IP_OP:
+            participant->send_request_by_ip(data1, data2);
             break;
         case OpCode::SEND_REQUEST_BY_USERNAME_OP:
             participant->send_request_by_username(data1, data2);
@@ -723,7 +723,7 @@ public:
     {
         throw std::logic_error { "Participant should not update_username" };
     }
-    void send_request(string_view, string_view) override
+    void send_request_by_ip(string_view, string_view) override
     {
         throw std::logic_error { "Participant should not send request" };
     }
@@ -936,37 +936,32 @@ public:
     {
         room.receive_participant_name(shared_from_this(), data1);
     }
-    void send_request(string_view data1, string_view data2) override
+    void send_request(string_view role_str, auto&& predicate)
     {
-        auto& participants { room.participants };
-        auto& my_request { room.my_request };
+        auto& participants { this->room.participants };
+        auto& my_request { this->room.my_request };
+        Role role { role_str };
+        auto participant { std::ranges::find_if(participants, predicate) };
+        if (participant == participants.end()) {
+            logger->error("send_request failed: {}, participant not found", ::to_string(shared_from_this()));
+            return;
+        }
+        my_request = *participant;
+        my_request->deliver({ OpCode::READY_OP, name, role_str });
+    }
+    void send_request_by_ip(string_view data1, string_view data2) override
+    {
         // data1 is host:port, data2 is role
         auto host { data1.substr(0, data1.find(':')) };
         auto port { data1.substr(data1.find(':') + 1) };
         tcp::endpoint ep { asio::ip::make_address(host), integer_cast<asio::ip::port_type>(port) };
-        Role role { data2 };
 
-        auto participant { std::ranges::find_if(participants, [ep](auto p) { return p->endpoint() == ep; }) };
-        if (participant == participants.end()) {
-            logger->error("send_request failed: {}, participant not found", ::to_string(shared_from_this()));
-            return;
-        }
-        my_request = *participant;
-        my_request->deliver({ OpCode::READY_OP, name, data2 });
+        send_request(data2, [&](auto p) { return p->endpoint() == ep; });
     }
     void send_request_by_username(string_view data1, string_view data2) override
     {
-        auto& participants { this->room.participants };
-        auto& my_request { this->room.my_request };
-
         // data1 is username, data2 is role
-        auto participant { std::ranges::find_if(participants, [data1](auto p) { return p->name == data1; }) };
-        if (participant == participants.end()) {
-            logger->error("send_request failed: {}, participant not found", ::to_string(shared_from_this()));
-            return;
-        }
-        my_request = *participant;
-        my_request->deliver({ OpCode::READY_OP, name, data2 });
+        send_request(data2, [&](auto p) { return p->name == data1; });
     }
     void receive_request(string_view, string_view) override
     {

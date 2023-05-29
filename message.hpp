@@ -34,7 +34,7 @@ _EXPORT enum class OpCode : int {
     CHAT_USERNAME_UPDATE_OP,
     // -------- Contest Request --------
     UPDATE_USERNAME_OP,
-    SEND_REQUEST_OP,
+    SEND_REQUEST_BY_IP_OP,
     SEND_REQUEST_BY_USERNAME_OP,
     RECEIVE_REQUEST_OP,
     ACCEPT_REQUEST_OP,
