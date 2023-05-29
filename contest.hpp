@@ -304,6 +304,6 @@ public:
                                                                     : "";
         auto moves_str = moves | std::views::transform([](auto pos) { return pos.to_string(); });
         return (moves_str | ranges::views::join_with(delimiter) | ranges::to<std::string>())
-            + delimiter + terminator;
+            + (terminator.empty() ? "" : (delimiter + terminator));
     }
 };
