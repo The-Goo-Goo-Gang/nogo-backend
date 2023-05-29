@@ -34,6 +34,7 @@
 #include <set>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <tuple>
 #include <vector>
 
@@ -54,6 +55,8 @@ using namespace std::chrono_literals;
 using std::chrono::milliseconds;
 using std::chrono::seconds;
 using std::chrono::system_clock;
+
+using std::operator""sv;
 
 constexpr auto TIMEOUT { 30s };
 
@@ -179,7 +182,57 @@ public:
         const string_view data1 { msg.data1 }, data2 { msg.data2 };
 
         switch (msg.op) {
+        case OpCode::REPLAY_START_MOVE_OP: {
+            // data1: current moves
+            if (contest.status == Contest::Status::ON_GOING) {
+                throw std::logic_error("contest already started");
+            }
+            contest.clear();
+            Player player1 { participant, "BLACK", Role::BLACK, PlayerType::LOCAL_HUMAN_PLAYER },
+                player2 { participant, "WHITE", Role::WHITE, PlayerType::LOCAL_HUMAN_PLAYER };
+            contest.enroll(std::move(player1)), contest.enroll(std::move(player2));
+            contest.local_role = Role::BLACK;
+            contest.is_replaying = true;
+
+            auto tmp {
+                data1 | ranges::views::split(" "sv)
+                | ranges::to<std::vector<std::string>>()
+            };
+
+            auto moves {
+                tmp | ranges::views::transform([](auto&& s) { return Position { s }; })
+                | ranges::to<std::vector<Position>>()
+            };
+
+            ranges::for_each(moves, [&](auto&& pos) {
+                Role role { contest.moves.size() % 2 == 0 ? Role::BLACK : Role::WHITE };
+                auto player { contest.players.at(role) };
+                contest.play(player, pos);
+            });
+
+            deliver_ui_state();
+            break;
+        }
+        case OpCode::REPLAY_MOVE_OP: {
+            Position pos { data1 };
+            Role role { contest.moves.size() % 2 == 0 ? Role::BLACK : Role::WHITE };
+            auto player { contest.players.at(role) };
+            contest.play(player, pos);
+            deliver_ui_state();
+            break;
+        }
+        case OpCode::REPLAY_STOP_MOVE_OP: {
+            contest.clear();
+            deliver_ui_state();
+            break;
+        }
         case OpCode::WIN_PENDING_OP: {
+            break;
+        }
+        case OpCode::CHAT_USERNAME_UPDATE_OP: {
+            break;
+        }
+        case OpCode::RECEIVE_REQUEST_RESULT_OP: {
             break;
         }
         case OpCode::UPDATE_UI_STATE_OP: {

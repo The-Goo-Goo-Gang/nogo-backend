@@ -183,6 +183,7 @@ public:
     std::chrono::system_clock::time_point start_time;
     std::chrono::system_clock::time_point end_time;
     Role local_role { Role::NONE };
+    bool is_replaying {};
 
     void clear()
     {
@@ -193,6 +194,7 @@ public:
         result = {};
         should_giveup = false;
         local_role = Role::NONE;
+        is_replaying = false;
     }
     void confirm()
     {

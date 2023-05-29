@@ -41,6 +41,10 @@ _EXPORT enum class OpCode : int {
     ACCEPT_REQUEST_OP,
     REJECT_REQUEST_OP,
     RECEIVE_REQUEST_RESULT_OP,
+    // -------- Game Replay --------
+    REPLAY_START_MOVE_OP,
+    REPLAY_MOVE_OP,
+    REPLAY_STOP_MOVE_OP,
     // -------- Extend OpCode End --------
 };
 
