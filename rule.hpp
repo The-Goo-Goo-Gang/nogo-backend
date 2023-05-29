@@ -122,16 +122,11 @@ public:
     virtual bool liberties(Position p) const = 0;
     virtual bool is_capturing(Position p) const = 0;
     virtual auto get_rank() const -> int = 0;
+    virtual auto to_string() const -> std::string = 0;
 
     friend auto operator<<(std::ostream& os, const BoardBase& board) -> std::ostream&
     {
-        auto arr = board.to_2dvector();
-        auto rank = board.get_rank();
-        for (int i = 0; i < rank; i++) {
-            for (int j = 0; j < rank; j++)
-                os << arr[i][j].map("B", "W", "-");
-            os << std::endl;
-        }
+        os << board.to_string() << std::endl;
         return os;
     }
 };
@@ -179,12 +174,25 @@ public:
     }
 
     auto get_rank() const -> int override { return Rank; }
+
+    auto to_string() const -> std::string override
+    {
+        auto& self { *this };
+        std::string res;
+        for (int i = 0; i < Rank; i++) {
+            for (int j = 0; j < Rank; j++) {
+                res += self[{ i, j }].map("B", "W", "-");
+            }
+            res += '\n';
+        }
+        return res;
+    }
 };
 
 _EXPORT struct State {
-    Board_ptr board;
-    Role role;
-    Position last_move;
+    Board_ptr board {};
+    Role role {};
+    Position last_move {};
 
     State(Board_ptr board = std::make_shared<Board<9>>(), Role role = Role::BLACK)
         : board(board)

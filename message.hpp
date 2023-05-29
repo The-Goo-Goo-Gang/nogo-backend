@@ -45,6 +45,8 @@ _EXPORT enum class OpCode : int {
     REPLAY_START_MOVE_OP,
     REPLAY_MOVE_OP,
     REPLAY_STOP_MOVE_OP,
+    // -------- Bot --------
+    BOT_HINT_OP,
     // -------- Extend OpCode End --------
 };
 

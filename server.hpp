@@ -27,6 +27,7 @@
 #include <algorithm>
 #include <chrono>
 #include <deque>
+#include <functional>
 #include <iostream>
 #include <optional>
 #include <queue>
@@ -38,6 +39,7 @@
 #include <tuple>
 #include <vector>
 
+#include "bot.hpp"
 #include "contest.hpp"
 #include "log.hpp"
 #include "message.hpp"
@@ -102,6 +104,79 @@ class Room {
         deliver_to_local(UiMessage { contest });
     }
 
+    auto do_move(Participant_ptr participant, Position pos, Role role = Role::NONE, bool is_local_game = false)
+    {
+        logger->debug("do_move: participant = {}, pos = {}, role = {}, is_local_game = {}", participant->to_string(), pos.to_string(), role.map("b", "w", "-"), std::to_string(is_local_game));
+        timer_cancelled_ = true;
+        timer_.cancel();
+
+        Player player, opponent;
+        try {
+            player = Player { contest.players.at(role, participant) };
+            opponent = Player { contest.players.at(-player.role) };
+        } catch (std::exception& e) {
+            logger->error("Ignore move: {}, playerlist: {}, try to find participant {}",
+                e.what(), contest.players.to_string(), participant->to_string());
+            return false;
+        }
+
+        try {
+            contest.play(player, pos);
+        } catch (Contest::StatusError& e) {
+            logger->error("Ignore move: {}, Contest status is {}", e.what(), std::to_underlying(contest.status));
+            return false;
+        } catch (std::exception& e) {
+            logger->error("Ignore move: {}, player:{}", e.what(), player.to_string());
+            return false;
+        }
+
+        if (!is_local_game)
+            check_online_contest_result();
+
+        if (contest.status == Contest::Status::ON_GOING) {
+            timer_cancelled_ = false;
+            timer_.expires_after(contest.duration);
+            timer_.async_wait([&](const asio::error_code& ec) {
+                if (!ec && !timer_cancelled_) {
+                    contest.timeout(opponent);
+                    if (!is_local_game)
+                        check_online_contest_result();
+                    deliver_ui_state();
+                }
+            });
+        }
+
+        deliver_ui_state();
+
+        check_bot(opponent.participant, opponent.role, is_local_game);
+        return true;
+    }
+
+    void check_bot(Participant_ptr participant, Role role = Role::NONE, bool is_local_game = false)
+    {
+        logger->debug("check_bot: participant = {}, role = {}, is_local_game = {}", participant->to_string(), role.map("b", "w", "-"), std::to_string(is_local_game));
+
+        if (!participant->is_local)
+            return;
+        if (contest.status != Contest::Status::ON_GOING)
+            return;
+
+        auto player { contest.players.at(role, participant) };
+
+        if (contest.current.role != player.role || player.type != PlayerType::BOT_PLAYER)
+            return;
+
+        std::cout << "check_bot: start bot" << std::endl;
+        auto bot = [this](const State& state, const Role& role = Role::NONE, const bool& is_local_game = false) {
+            std::cout << "bot start calcing move, role = " << role.map("b", "w", "") << std::endl;
+            auto pos = mcts_bot_player(state);
+            std::cout << "bot calced move: " << pos.to_string() << std::endl;
+            do_move(nullptr, pos, role, is_local_game);
+        };
+        std::thread bot_thread { bot, std::ref(contest.current), std::ref(player.role), std::ref(is_local_game) };
+        bot_thread.detach();
+    }
+
     auto receive_participant_name(Participant_ptr participant, std::string_view name)
     {
         auto new_name { name };
@@ -133,11 +208,11 @@ class Room {
     void enroll_players(ContestRequest& request)
     {
         contest.set_board_size(9);
+        contest.duration = TIMEOUT;
         Player player1 { request.sender, request.sender->get_name(), request.role, request.sender->is_local ? PlayerType::LOCAL_HUMAN_PLAYER : PlayerType::REMOTE_HUMAN_PLAYER },
             player2 { request.receiver, request.receiver->get_name(), -request.role, request.receiver->is_local ? PlayerType::LOCAL_HUMAN_PLAYER : PlayerType::REMOTE_HUMAN_PLAYER };
         contest.enroll(std::move(player1)), contest.enroll(std::move(player2));
         contest.local_role = request.sender->is_local ? request.role : -request.role;
-        contest.duration = TIMEOUT;
     }
 
     void reject_all_received_requests()
@@ -182,6 +257,15 @@ public:
         const string_view data1 { msg.data1 }, data2 { msg.data2 };
 
         switch (msg.op) {
+        case OpCode::BOT_HINT_OP: {
+            auto bot = [=](const State& state) {
+                auto pos = mcts_bot_player(state);
+                logger->info("bot calced move: {}", pos.to_string());
+            };
+            std::thread bot_thread { bot, std::ref(contest.current) };
+            bot_thread.detach();
+            break;
+        }
         case OpCode::REPLAY_START_MOVE_OP: {
             // data1: current moves
             if (contest.status == Contest::Status::ON_GOING) {
@@ -255,19 +339,25 @@ public:
             break;
         }
         case OpCode::START_LOCAL_GAME_OP: {
-            std::cout << "start local game: timeout = " << data1 << ", size = " << data2 << std::endl;
+            // data1 = timeout|type, data2 = size
+            auto tmp = data1 | ranges::views::split("|"sv) | ranges::to<std::vector<std::string>>();
+            if (tmp.size() != 2) {
+                throw std::logic_error("invalid data1");
+            }
+            logger->info("start local game: timeout = {}, type = {}, size = {}", tmp[0], tmp[1], data2);
             if (contest.status != Contest::Status::NOT_PREPARED) {
                 contest.clear();
             }
-            int timeout = stoi(data1);
+            int timeout = stoi(tmp[0]);
+            int type = stoi(tmp[1]);
             int size = stoi(data2);
 
             seconds duration { timeout };
             contest.duration = duration;
             contest.set_board_size(size);
 
-            Player player1 { participant, "BLACK", Role::BLACK, PlayerType::LOCAL_HUMAN_PLAYER },
-                player2 { participant, "WHITE", Role::WHITE, PlayerType::LOCAL_HUMAN_PLAYER };
+            Player player1 { participant, "Black", Role::BLACK, PlayerType::LOCAL_HUMAN_PLAYER },
+                player2 { participant, "White", Role::WHITE, (type == 1 ? PlayerType::BOT_PLAYER : PlayerType::LOCAL_HUMAN_PLAYER) };
             try {
                 contest.enroll(std::move(player1)), contest.enroll(std::move(player2));
             } catch (Contest::StatusError& e) {
@@ -281,6 +371,7 @@ public:
             }
             contest.local_role = Role::BLACK;
             deliver_ui_state();
+            check_bot(participant, Role::BLACK, true);
             break;
         }
         case OpCode::LOCAL_GAME_TIMEOUT_OP: {
@@ -288,43 +379,10 @@ public:
             break;
         }
         case OpCode::LOCAL_GAME_MOVE_OP: {
-            timer_.cancel();
-
             Position pos { data1 };
             Role role { data2 };
 
-            Player player, opponent;
-            try {
-                player = contest.players.at(role, participant);
-                opponent = contest.players.at(-player.role);
-            } catch (std::exception& e) {
-                logger->error("Ignore move: {}, playerlist: {}, try to find role {}, participant {}",
-                    e.what(), contest.players.to_string(), role.to_string(), participant->to_string());
-                break;
-            }
-
-            try {
-                contest.play(player, pos);
-            } catch (Contest::StatusError& e) {
-                logger->error("Ignore move: {}, Contest status is {}", e.what(), std::to_underlying(contest.status));
-                break;
-            } catch (std::exception& e) {
-                logger->error("Ignore move: {}, player:{}", e.what(), player.to_string());
-                break;
-            }
-
-            if (contest.status == Contest::Status::ON_GOING) {
-                timer_.expires_after(contest.duration);
-                timer_.async_wait([this, opponent](const asio::error_code& ec) {
-                    if (!ec) {
-                        contest.timeout(opponent);
-                        opponent.participant->deliver({ OpCode::TIMEOUT_END_OP });
-                        deliver_ui_state();
-                    }
-                });
-            }
-
-            deliver_ui_state();
+            do_move(participant, pos, role, true);
             break;
         }
 
@@ -448,55 +506,11 @@ public:
             break;
         }
         case OpCode::MOVE_OP: {
-            timer_cancelled_ = true;
-            timer_.cancel();
-            std::cout << "timer canceled" << std::endl;
-
             Position pos { data1 };
-            try {
-                milliseconds ms { stoull(data2) };
-            } catch (std::exception& e) {
-                // TODO:
+
+            if (do_move(participant, pos)) {
+                deliver_to_others(msg, participant); // broadcast
             }
-
-            // TODO: adjust time
-            Player player, opponent;
-            try {
-                player = Player { contest.players.at(Role::NONE, participant) };
-                opponent = Player { contest.players.at(-player.role) };
-            } catch (std::exception& e) {
-                logger->error("Ignore move: {}, playerlist: {}, try to find participant {}",
-                    e.what(), contest.players.to_string(), participant->to_string());
-                break;
-            }
-
-            try {
-                contest.play(player, pos);
-            } catch (Contest::StatusError& e) {
-                logger->error("Ignore move: {}, Contest status is {}", e.what(), std::to_underlying(contest.status));
-                break;
-            } catch (std::exception& e) {
-                logger->error("Ignore move: {}, player:{}", e.what(), player.to_string());
-                break;
-            }
-
-            deliver_to_others(msg, participant); // broadcast
-            check_online_contest_result();
-
-            if (contest.status == Contest::Status::ON_GOING) {
-                contest.duration = TIMEOUT;
-                timer_cancelled_ = false;
-                timer_.expires_after(contest.duration);
-                timer_.async_wait([this, opponent, participant](const asio::error_code& ec) {
-                    if (!ec && !timer_cancelled_) {
-                        contest.timeout(opponent);
-                        check_online_contest_result();
-                        deliver_ui_state();
-                    }
-                });
-            }
-
-            deliver_ui_state();
             break;
         }
         case OpCode::GIVEUP_OP: {

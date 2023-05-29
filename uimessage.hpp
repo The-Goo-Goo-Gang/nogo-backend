@@ -49,7 +49,7 @@ _EXPORT struct UiMessage : public Message {
         PlayerData() = default;
         PlayerData(const Player& player)
             : name(player.name)
-            , type(PlayerType::LOCAL_HUMAN_PLAYER)
+            , type(player.type)
             , chess_type(player.role.id)
         {
         }
@@ -84,6 +84,7 @@ _EXPORT struct UiMessage : public Message {
         std::vector<std::vector<int>> chessboard;
         int now_playing;
         int move_count;
+        bool should_giveup;
         long long start_time;
         long long end_time;
         std::optional<Position> last_move;
@@ -102,6 +103,7 @@ _EXPORT struct UiMessage : public Message {
             , end_time { contest.status == Contest::Status::GAME_OVER ? std::chrono::duration_cast<std::chrono::milliseconds>(contest.end_time.time_since_epoch()).count() : 0 }
             , encoded { contest.encode() }
             , is_replaying(contest.is_replaying)
+            , should_giveup(contest.should_giveup)
         {
             auto rank = contest.current.board->get_rank();
             auto actions = contest.current.available_actions();
@@ -119,7 +121,7 @@ _EXPORT struct UiMessage : public Message {
             }
         }
 
-        NLOHMANN_DEFINE_TYPE_INTRUSIVE(Game, is_replaying, chessboard, now_playing, move_count, metadata, statistics, disabled_positions, last_move, start_time, end_time, encoded)
+        NLOHMANN_DEFINE_TYPE_INTRUSIVE(Game, should_giveup, is_replaying, chessboard, now_playing, move_count, metadata, statistics, disabled_positions, last_move, start_time, end_time, encoded)
     };
     struct UiState {
         bool is_gaming;
