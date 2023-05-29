@@ -325,6 +325,33 @@ TEST_F(NogoTest, GiveUpTest)
         {},
     };
 }
+
+#include "../bot.hpp"
+
+TEST(BotTest, PlayWithRandomBot)
+{
+    State state = {};
+
+    while (state.available_actions().size()) {
+        std::vector<Position> actions = state.available_actions();
+        if (state.role == Role::BLACK) {
+            std::cout << actions.size() << " ";
+            Position p = mcts_bot_player(state);
+            std::cout << p.to_string() << " ";
+            state = state.next_state(p);
+        } else {
+            std::cout << actions.size() << " ";
+            Position p = random_bot_player(state);
+            std::cout << p.to_string() << " ";
+            state = state.next_state(p);
+        }
+    }
+
+    auto winner = -state.role;
+    EXPECT_EQ(winner, Role::BLACK) << "mcts lost";
+    std::cout << std::endl;
+}
+
 int main(int argc, char* argv[])
 {
     testing::InitGoogleTest();

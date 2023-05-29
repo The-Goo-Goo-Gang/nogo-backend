@@ -1,7 +1,7 @@
 #pragma once
 #ifndef _EXPORT
 #define _EXPORT
-#endif 
+#endif
 
 #include <chrono>
 #include <cmath>
@@ -9,11 +9,12 @@
 #include <random>
 #include <vector>
 
+#include <range/v3/all.hpp>
+
 #include "rule.hpp"
 
 namespace chrono = std::chrono;
 using namespace std::chrono_literals;
-namespace ranges = std::ranges;
 
 std::mt19937 rng(std::random_device {}());
 std::uniform_real_distribution<double> dist(0, 1);
@@ -57,13 +58,12 @@ struct MCTSNode : std::enable_shared_from_this<MCTSNode> {
         // if (!node->available_actions.size())
         //     node->available_actions = node->state.available_actions();
         auto node { shared_from_this() };
-
-        while (!node->state.is_over() && node->children.size() == node->state.available_actions().size()) {
+        while (!node->state.is_over() && node->state.available_actions().size() && node->children.size() == node->state.available_actions().size()) {
             node = node->best_child(C);
         }
 
         State state { node->state };
-        if (!state.is_over()) {
+        if (!state.is_over() && state.available_actions().size()) {
             auto actions { state.available_actions() };
             auto action { actions[node->children.size()] };
             node = node->add_child(state.next_state(action));
@@ -127,6 +127,15 @@ _EXPORT constexpr auto mcts_bot_player_generator(double C)
             double reward = expand_node->default_policy2();
             expand_node->backup(reward);
         }
+        if (root->children.size() == 0) {
+            auto arr = state.board.index();
+            for (auto i : arr) {
+                if (state.board[i] == Role::NONE) {
+                    return i;
+                }
+            }
+        }
+
         return root->best_child(0)->state.last_move;
     };
 }
