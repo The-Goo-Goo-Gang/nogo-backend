@@ -117,8 +117,8 @@ class Room {
             player = Player { contest.players.at(role, participant) };
             opponent = Player { contest.players.at(-player.role) };
         } catch (std::exception& e) {
-            logger->error("Ignore move: {}, playerlist: {}, cannot find participant",
-                e.what(), contest.players.to_string());
+            logger->error("Ignore move: {}, playerlist: {}, cannot find player {}",
+                e.what(), contest.players.to_string(), role.map("b", "w", "-"));
             return false;
         }
 
@@ -154,29 +154,40 @@ class Room {
         return true;
     }
 
+    auto should_bot_move(Participant_ptr participant, Role role = Role::NONE)
+    {
+        if (!participant->is_local || contest.status != Contest::Status::ON_GOING)
+            return false;
+
+        auto player { contest.players.at(role, participant) };
+
+        return player.type == PlayerType::BOT_PLAYER && contest.current.role == player.role;
+    }
+
     void check_bot(Participant_ptr participant, Role role = Role::NONE, bool is_local_game = false)
     {
-        logger->debug("check_bot: participant = {}, role = {}, is_local_game = {}", participant->to_string(), role.map("b", "w", "-"), std::to_string(is_local_game));
+        logger->debug("check_bot: participant = {}, role = {}, is_local_game = {}", participant != nullptr ? participant->to_string() : "null", role.map("b", "w", "-"), std::to_string(is_local_game));
 
-        if (!participant->is_local)
-            return;
-        if (contest.status != Contest::Status::ON_GOING)
+        if (!should_bot_move(participant, role))
             return;
 
         auto player { contest.players.at(role, participant) };
 
-        if (contest.current.role != player.role || player.type != PlayerType::BOT_PLAYER)
-            return;
-
-        std::cout << "check_bot: start bot" << std::endl;
-        auto bot = [&](const State& state, const Role& role = Role::NONE, const bool& is_local_game = false) {
+        logger->info("check_bot: start bot");
+        auto bot = [&](const State& state, Participant_ptr participant, const Role& role = Role::NONE, bool is_local_game = false) {
             std::lock_guard<std::mutex> guard(bot_mutex);
-            std::cout << "bot start calcing move, role = " << role.map("b", "w", "") << std::endl;
+            logger->info("bot start calcing move, role = {}", role.map("b", "w", "-"));
             auto pos = mcts_bot_player(state);
-            std::cout << "bot calced move: " << pos.to_string() << std::endl;
-            do_move(nullptr, pos, role, is_local_game);
+            if (pos.has_value()) {
+                logger->info("bot finish calcing move, role = {}, pos = {}", role.map("b", "w", "-"), pos->to_string());
+                if (should_bot_move(participant, role)) {
+                    do_move(participant, pos.value(), role, is_local_game);
+                }
+            } else {
+                logger->error("bot failed to calc move, role = {}", role.map("b", "w", "-"));
+            }
         };
-        std::thread bot_thread { bot, std::ref(contest.current), std::ref(player.role), std::ref(is_local_game) };
+        std::thread bot_thread { bot, std::ref(contest.current), participant, player.role, is_local_game };
         bot_thread.detach();
     }
 

@@ -9,9 +9,8 @@
 #include <memory>
 #include <random>
 #include <vector>
+#include <optional>
 
-// #include "utility.hpp"
-#include "log.hpp"
 #include "rule.hpp"
 
 namespace chrono = std::chrono;
@@ -63,7 +62,6 @@ struct MCTSNode : std::enable_shared_from_this<MCTSNode> {
         }
 
         if (!node->available_actions.size()) {
-            // std::cout << "mcts_bot_player: no available actions" << std::endl;
             return node;
         }
 
@@ -71,11 +69,9 @@ struct MCTSNode : std::enable_shared_from_this<MCTSNode> {
         if (node->children.size() < node->state.available_actions().size()) {
             auto actions { state.available_actions() };
             auto action { actions[node->children.size()] };
-            // std::cout << "mcts_bot_player: expand node at " << action.to_string() << std::endl;
             return node->add_child(state.next_state(action));
         }
 
-        // std::cout << "mcts_bot_player: select best child" << std::endl;
         return node->best_child(C)->tree_policy(C);
     }
 
@@ -127,21 +123,17 @@ _EXPORT Position random_bot_player(const State& state)
 
 _EXPORT constexpr auto mcts_bot_player_generator(double C)
 {
-    return [=](const State& state) {
-        // std::cout << "mcts_bot_player start, current board:" << std::endl
-        //           << state.board->to_string() << std::endl;
+    return [=](const State& state) -> std::optional<Position> {
         auto start = chrono::high_resolution_clock::now();
         auto root = std::make_shared<MCTSNode>(state);
-        // std::cout << "mcts_bot_player running" << std::endl;
         while (chrono::high_resolution_clock::now() - start < 1500ms) {
-            // std::cout << "mcts_bot_player expand_node" << std::endl;
             auto expand_node = root->tree_policy(C);
-            // std::cout << "mcts_bot_player expand_node reward" << std::endl;
             double reward = expand_node->default_policy2();
-            // std::cout << "mcts_bot_player expand_node reward = " << reward << std::endl;
             expand_node->backup(reward);
         }
-        // std::cout << "mcts_bot_player run end" << std::endl;
+        if (!root->children.size()) {
+            return std::nullopt;
+        }
         return root->best_child(C)->state.last_move;
     };
 }
