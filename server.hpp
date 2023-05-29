@@ -243,6 +243,7 @@ class Room {
 
     void enroll_players(ContestRequest& request)
     {
+        contest.clear();
         contest.set_board_size(9);
         contest.duration = TIMEOUT;
         Player player1 { request.sender, request.sender->get_name(), request.role, request.sender->is_local ? PlayerType::LOCAL_HUMAN_PLAYER : PlayerType::REMOTE_HUMAN_PLAYER },
@@ -253,11 +254,8 @@ class Room {
 
     void reject_all_received_requests()
     {
-        while (!received_requests.empty()) {
-            auto r = received_requests.front();
-            received_requests.pop_front();
-            r.sender->deliver({ OpCode::REJECT_OP, r.receiver->get_name() });
-        }
+        ranges::for_each(received_requests, [](auto& r) { r.sender->deliver({ OpCode::REJECT_OP, r.receiver->get_name() }); });
+        received_requests.clear();
     }
 
     void check_online_contest_result()
@@ -389,8 +387,8 @@ public:
             contest.duration = duration;
             contest.set_board_size(size);
 
-            Player player1 { participant, "Black", Role::BLACK, PlayerType::LOCAL_HUMAN_PLAYER },
-                player2 { participant, "White", Role::WHITE, (type == 1 ? PlayerType::BOT_PLAYER : PlayerType::LOCAL_HUMAN_PLAYER) };
+            Player player1 { participant, "Black", Role::BLACK, (type == 2 || type == 3 ? PlayerType::BOT_PLAYER : PlayerType::LOCAL_HUMAN_PLAYER) },
+                player2 { participant, "White", Role::WHITE, (type == 1 || type == 3 ? PlayerType::BOT_PLAYER : PlayerType::LOCAL_HUMAN_PLAYER) };
             try {
                 contest.enroll(std::move(player1)), contest.enroll(std::move(player2));
             } catch (Contest::StatusError& e) {
@@ -547,7 +545,7 @@ public:
             break;
         }
         case OpCode::GIVEUP_OP: {
-            // data1(role)
+            // data1: role(local) / username(online)
             // TODO: data2(greeting)
             Role role { data1 };
             Player player, opponent;
