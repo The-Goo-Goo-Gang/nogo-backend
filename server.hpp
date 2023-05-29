@@ -138,6 +138,7 @@ class Room {
         contest.enroll(std::move(player1)), contest.enroll(std::move(player2));
         contest.local_role = request.sender->is_local ? request.role : -request.role;
         contest.duration = TIMEOUT;
+        contest.set_board_size(9);
     }
 
     void reject_all_received_requests()
@@ -260,10 +261,11 @@ public:
                 contest.clear();
             }
             int timeout = stoi(data1);
-            // int rank_n = std::stoi(msg.data2);
+            int size = stoi(data2);
 
             seconds duration { timeout };
             contest.duration = duration;
+            contest.set_board_size(size);
 
             Player player1 { participant, "BLACK", Role::BLACK, PlayerType::LOCAL_HUMAN_PLAYER },
                 player2 { participant, "WHITE", Role::WHITE, PlayerType::LOCAL_HUMAN_PLAYER };
