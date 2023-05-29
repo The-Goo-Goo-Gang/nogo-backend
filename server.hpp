@@ -106,6 +106,25 @@ class Room {
         deliver_to_local(UiMessage { contest });
     }
 
+    constexpr auto is_local_contest() -> bool
+    {
+        constexpr std::array<Role, 2> roles { Role::BLACK, Role::WHITE };
+        return ranges::all_of(roles, [&](auto role) { return contest.players.at(role).participant->is_local; });
+    }
+
+    void toggle_bot_hosting(Role role, Participant_ptr participant = nullptr, bool is_local_game = false)
+    {
+        Player& player { contest.players.at(role, participant) };
+        if (player.type == PlayerType::REMOTE_HUMAN_PLAYER)
+            return;
+        if (player.type == PlayerType::BOT_PLAYER) {
+            player.type = PlayerType::LOCAL_HUMAN_PLAYER;
+        } else {
+            player.type = PlayerType::BOT_PLAYER;
+            check_bot(participant, role, is_local_game);
+        }
+    }
+
     auto do_move(Participant_ptr participant, Position pos, Role role = Role::NONE, bool is_local_game = false)
     {
         logger->debug("do_move: pos = {}, role = {}, is_local_game = {}", pos.to_string(), role.map("b", "w", "-"), std::to_string(is_local_game));
@@ -138,8 +157,9 @@ class Room {
         if (contest.status == Contest::Status::ON_GOING) {
             timer_cancelled_ = false;
             timer_.expires_after(contest.duration);
-            timer_.async_wait([&](const asio::error_code& ec) {
+            timer_.async_wait([=](const asio::error_code& ec) {
                 if (!ec && !timer_cancelled_) {
+                    logger->debug("timeout: role = {}", role.map("b", "w", "-"));
                     contest.timeout(opponent);
                     if (!is_local_game)
                         check_online_contest_result();
@@ -271,14 +291,10 @@ public:
         const string_view data1 { msg.data1 }, data2 { msg.data2 };
 
         switch (msg.op) {
-        case OpCode::BOT_HINT_OP: {
-            auto bot = [&](const State& state) {
-                std::lock_guard<std::mutex> guard(bot_mutex);
-                auto pos = mcts_bot_player(state);
-                logger->info("bot calced move: {}", pos.to_string());
-            };
-            std::thread bot_thread { bot, std::ref(contest.current) };
-            bot_thread.detach();
+        case OpCode::BOT_HOSTING_OP: {
+            Role role { data1 };
+            toggle_bot_hosting(role, participant, is_local_contest());
+            deliver_ui_state();
             break;
         }
         case OpCode::REPLAY_START_MOVE_OP: {
