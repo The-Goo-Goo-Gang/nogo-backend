@@ -66,6 +66,11 @@ public:
     class RoleOccupiedException : public std::logic_error {
         using std::logic_error::logic_error;
     };
+    PlayerList() = default;
+    PlayerList(std::initializer_list<Player> players)
+        : players { players }
+    {
+    }
     auto to_string() const
     {
         return players | ranges::views::transform([](auto& p) { return ::to_string(p); })
@@ -167,6 +172,7 @@ public:
     Contest(PlayerList players)
         : players(std::move(players))
     {
+        status = Status::ON_GOING;
     }
 
     void clear()

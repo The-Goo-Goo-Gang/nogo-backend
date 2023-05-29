@@ -158,27 +158,12 @@ public:
 
 _EXPORT using Participant_ptr = std::shared_ptr<Participant>;
 
-struct ContestRequest {
-    Participant_ptr sender;
-    Participant_ptr receiver;
-    Role role;
-    system_clock::time_point time;
-
-    ContestRequest(Participant_ptr sender, Participant_ptr receiver, Role role, system_clock::time_point time = system_clock::now())
-        : sender { sender }
-        , receiver { receiver }
-        , role { role }
-        , time { time }
-    {
-    }
-};
-
 class Room {
 public:
     Contest contest;
     std::deque<std::string> chats;
-    std::optional<ContestRequest> my_request;
-    std::queue<ContestRequest> received_requests;
+    Participant_ptr my_request;
+    std::deque<Participant_ptr> received_requests;
 
     Participant_ptr find_local_participant()
     {
@@ -218,30 +203,12 @@ public:
         return new_name;
     }
 
-    void receive_new_request(const ContestRequest& request)
-    {
-        if (received_requests.empty()) {
-            deliver_to_local({ OpCode::RECEIVE_REQUEST_OP, request.sender->name, request.role.map("b", "w", "") });
-        }
-        received_requests.push(request);
-        deliver_ui_state();
-    }
-
-    void enroll_players(ContestRequest& request)
-    {
-        Player player1 { request.sender, request.sender->name, request.role, request.sender->is_local ? PlayerType::LOCAL_HUMAN_PLAYER : PlayerType::REMOTE_HUMAN_PLAYER },
-            player2 { request.receiver, request.receiver->name, -request.role, request.receiver->is_local ? PlayerType::LOCAL_HUMAN_PLAYER : PlayerType::REMOTE_HUMAN_PLAYER };
-        request.sender->player = player1, request.receiver->player = player2;
-        contest.enroll(std::move(player1)), contest.enroll(std::move(player2));
-        contest.local_role = request.sender->is_local ? request.role : -request.role;
-    }
-
-    void reject_all_received_requests()
+    void reject_all_received_requests(string_view name)
     {
         while (!received_requests.empty()) {
             auto r = received_requests.front();
-            received_requests.pop();
-            r.sender->deliver({ OpCode::REJECT_OP, r.receiver->name });
+            received_requests.pop_back();
+            r->deliver({ OpCode::REJECT_OP, name });
         }
     }
 
@@ -249,7 +216,6 @@ public:
     Room(asio::io_context& io_context)
         : timer { io_context }
         , io_context { io_context }
-        , my_request { std::nullopt }
     {
     }
     void process_data(Message msg, Participant_ptr participant)
@@ -365,27 +331,19 @@ public:
             return;
         }
         logger->debug("leave: erase participant, participants.size() = {}", participants.size());
-        if (participants.find(participant) != participants.end())
-            participants.erase(participant);
+        participants.erase(participant);
         logger->debug("leave: erase end, participants.size() = {}", participants.size());
         logger->debug("leave: remove all requests from {}:{} in received_requests", participant->endpoint().address().to_string(), participant->endpoint().port());
-        std::queue<ContestRequest> requests {};
-        requests.swap(received_requests);
-        auto is_first { !requests.empty() && requests.front().sender == participant };
-        while (!requests.empty()) {
-            auto request = requests.front();
-            requests.pop();
-            if (request.sender != participant) {
-                received_requests.push(request);
-            }
-        }
+
+        auto is_first { !received_requests.empty() && received_requests.front() == participant };
+        std::erase(received_requests, participant);
         if (is_first && !received_requests.empty()) {
             logger->debug("leave: is_first && !received_requests.empty(), send received_requests.front() to local");
-            deliver_to_local({ OpCode::RECEIVE_REQUEST_OP, received_requests.front().sender->name, received_requests.front().role.map("b", "w", "") });
+            deliver_to_local({ OpCode::RECEIVE_REQUEST_OP, received_requests.front()->name, received_requests.front()->player.role.map("b", "w", "") });
         }
-        if (participant == my_request->receiver) {
+        if (participant == my_request) {
             logger->debug("leave: my_request->receiver == participant, clear my_request");
-            my_request = std::nullopt;
+            my_request = nullptr;
         }
         if (!participant->name.empty()) {
             logger->debug("leave: participant->name is not empty, send LEAVE_OP to local");
@@ -495,7 +453,7 @@ awaitable<void> Participant::reader()
         for (std::string message;;) {
             co_await asio::async_read_until(socket, buffer, '\n', use_awaitable);
             std::getline(stream, message);
-            logger->info("Rece{}", message);
+            logger->info("Receive: {}", message);
             room.process_data({ message }, shared_from_this());
         }
     } catch (std::exception& e) {
@@ -605,20 +563,20 @@ public:
         auto name { room.receive_participant_name(shared_from_this(), data1) };
         Role role { data2 };
 
-        if (my_request.has_value() && shared_from_this() == my_request->receiver) {
+        if (my_request == shared_from_this()) {
             room.deliver_to_local({ OpCode::RECEIVE_REQUEST_RESULT_OP, "accepted", name });
             // contest accepted, enroll players
-            contest = Contest { PlayerList { this->player, my_request->sender->player } };
-            contest.local_role = request.sender->is_local ? request.role : -request.role;
+            contest = Contest { PlayerList { this->player, my_request->player } };
+            contest.local_role = my_request->is_local ? my_request->player.role : -my_request->player.role;
             // TODO: catch exceptions when enrolling playersmy_request
-            my_request = std::nullopt;
-            room.reject_all_received_requests();
+            my_request = nullptr;
+            room.reject_all_received_requests(this->name);
         } else {
-            ContestRequest request { shared_from_this(), room.find_local_participant(), role };
+            this->player = Player { shared_from_this(), name, role, PlayerType::REMOTE_HUMAN_PLAYER };
             if (received_requests.empty()) {
-                room.deliver_to_local({ OpCode::RECEIVE_REQUEST_OP, request.sender->name, request.role.map("b", "w", "") });
+                room.deliver_to_local({ OpCode::RECEIVE_REQUEST_OP, this->name, this->player.role.map("b", "w", "") });
             }
-            received_requests.push(request);
+            received_requests.push_back(shared_from_this());
         }
     }
     void reject(string_view data1, string_view) override
@@ -628,9 +586,9 @@ public:
         contest.reject();
 
         auto name { room.receive_participant_name(shared_from_this(), data1) };
-        if (my_request.has_value() && shared_from_this() == my_request->receiver) {
+        if (my_request == shared_from_this()) {
             room.deliver_to_local({ OpCode::RECEIVE_REQUEST_RESULT_OP, "rejected", name });
-            my_request = std::nullopt;
+            my_request = nullptr;
         }
     }
     // move
@@ -986,17 +944,13 @@ public:
         tcp::endpoint ep { asio::ip::make_address(host), integer_cast<asio::ip::port_type>(port) };
         Role role { data2 };
 
-        auto ps = participants | std::views::filter([ep](auto p) { return p->endpoint() == ep; })
-            | ranges::to<std::vector>();
-
-        if (ps.size() != 1) {
-            throw std::logic_error { "participants.size() != 1" };
+        auto participant { std::ranges::find_if(participants, [ep](auto p) { return p->endpoint() == ep; }) };
+        if (participant == participants.end()) {
+            logger->error("send_request failed: {}, participant not found", ::to_string(shared_from_this()));
+            return;
         }
-
-        auto receiver { ps[0] };
-        ContestRequest request { shared_from_this(), receiver, role };
-        my_request = request;
-        receiver->deliver({ OpCode::READY_OP, name, data2 });
+        my_request = *participant;
+        my_request->deliver({ OpCode::READY_OP, name, data2 });
     }
     void send_request_by_username(string_view data1, string_view data2) override
     {
@@ -1004,17 +958,12 @@ public:
         auto& my_request { this->room.my_request };
 
         // data1 is username, data2 is role
-        auto ps = participants | std::views::filter([data1](auto p) { return p->name == data1; })
-            | ranges::to<std::vector>();
-
-        if (ps.size() != 1) {
-            throw std::logic_error { "participants.size() != 1" };
+        auto participant { std::ranges::find_if(participants, [data1](auto p) { return p->name == data1; }) };
+        if (participant == participants.end()) {
+            logger->error("send_request failed: {}, participant not found", ::to_string(shared_from_this()));
+            return;
         }
-
-        auto receiver { ps[0] };
-        ContestRequest request { shared_from_this(), receiver, Role { data2 } };
-        my_request = request;
-        receiver->deliver({ OpCode::READY_OP, name, data2 });
+        my_request->deliver({ OpCode::READY_OP, name, data2 });
     }
     void receive_request(string_view, string_view) override
     {
@@ -1024,27 +973,28 @@ public:
     void accept_request(string_view, string_view) override
     {
         auto& received_requests { this->room.received_requests };
-        if (received_requests.empty()) {
+        if (received_requests.empty())
             throw std::logic_error { "received_requests.empty()" };
-        }
-        auto request { received_requests.front() };
-        received_requests.pop();
-        room.reject_all_received_requests();
-        request.sender->deliver({ OpCode::READY_OP, request.receiver->name, (-request.role).map("b", "w", "") });
-        room.enroll_players(request);
+        auto participant { received_requests.front() };
+        received_requests.pop_back();
+        room.reject_all_received_requests(this->name);
+
+        participant->deliver({ OpCode::READY_OP, this->name, (-participant->player.role).map("b", "w", "") });
+        // logger->info("accept_request: {} {}", ::to_string(request.sender->player), ::to_string(request.receiver->player));
+        room.contest = Contest { { this->player, participant->player } };
+        room.contest.local_role = participant->is_local ? participant->player.role : -participant->player.role;
     }
     void reject_request(string_view, string_view) override
     {
         auto& received_requests { this->room.received_requests };
-        if (received_requests.empty()) {
+        if (received_requests.empty())
             throw std::runtime_error { "received_requests.empty()" };
-        }
-        auto request = received_requests.front();
-        received_requests.pop();
-        request.sender->deliver({ OpCode::REJECT_OP, request.receiver->name });
+        auto participant { received_requests.front() };
+        received_requests.pop_back();
+        participant->deliver({ OpCode::REJECT_OP, this->name });
         if (!received_requests.empty()) {
-            auto next_request = received_requests.front();
-            next_request.receiver->deliver({ OpCode::RECEIVE_REQUEST_OP, next_request.sender->name, next_request.role.map("b", "w", "") });
+            auto next_participant { received_requests.front() };
+            next_participant->deliver({ OpCode::RECEIVE_REQUEST_OP, next_participant->name, next_participant->player.role.map("b", "w", "") });
         }
     }
     // receive_request_result

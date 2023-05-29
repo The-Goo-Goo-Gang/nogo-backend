@@ -25,5 +25,5 @@ void init_log()
     warn_sink->set_level(spdlog::level::warn);
     logger = spdlog::logger("logger", { console_sink, trace_sink, debug_sink, info_sink, warn_sink });
     logger->set_level(spdlog::level::trace);
-    logger->flush_on(spdlog::level::critical);
+    logger->flush_on(spdlog::level::err);
 }
