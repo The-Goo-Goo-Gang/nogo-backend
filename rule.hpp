@@ -106,7 +106,7 @@ public:
 
     virtual auto index() -> std::vector<Position> = 0;
 
-    virtual Role operator[](Position p) = 0;
+    virtual Role& operator[](Position p) = 0;
     virtual const Role& operator[](Position p) const = 0;
     virtual auto in_border(Position p) const -> bool = 0;
 
@@ -143,7 +143,7 @@ private:
     }
 
 public:
-    Role operator[](Position p) override { return arr[p.x * Rank + p.y]; }
+    Role& operator[](Position p) override { return arr[p.x * Rank + p.y]; }
     const Role& operator[](Position p) const override { return arr[p.x * Rank + p.y]; }
 
     auto index() -> std::vector<Position> override
