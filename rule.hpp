@@ -90,16 +90,6 @@ protected:
 
 public:
     using Board_ptr = std::shared_ptr<BoardBase>;
-
-    static auto index(const int& rank) -> std::vector<Position>
-    {
-        std::vector<Position> res;
-        res.resize(rank * rank);
-        for (int i = 0; i < rank; i++)
-            for (int j = 0; j < rank; j++)
-                res[i * rank + j] = { i, j };
-        return res;
-    }
     auto to_2dvector() const
     {
         auto rank = get_rank();
@@ -114,7 +104,9 @@ public:
         return res;
     }
 
-    virtual Role& operator[](Position p) = 0;
+    virtual auto index() -> std::vector<Position> = 0;
+
+    virtual Role operator[](Position p) = 0;
     virtual const Role& operator[](Position p) const = 0;
     virtual auto in_border(Position p) const -> bool = 0;
 
@@ -151,8 +143,20 @@ private:
     }
 
 public:
-    Role& operator[](Position p) override { return arr[p.x * Rank + p.y]; }
+    Role operator[](Position p) override { return arr[p.x * Rank + p.y]; }
     const Role& operator[](Position p) const override { return arr[p.x * Rank + p.y]; }
+
+    auto index() -> std::vector<Position> override
+    {
+        std::vector<Position> res;
+        res.reserve(Rank * Rank);
+        for (int i = 0; i < Rank; i++) {
+            for (int j = 0; j < Rank; j++) {
+                res.emplace_back(i, j);
+            }
+        }
+        return res;
+    }
 
     bool in_border(Position p) const override { return p.x >= 0 && p.y >= 0 && p.x < Rank && p.y < Rank; }
 
@@ -222,7 +226,7 @@ _EXPORT struct State {
 
     auto available_actions() const
     {
-        auto index = BoardBase::index(board->get_rank());
+        auto index = board->index();
         return index | ranges::views::filter([&](auto pos) {
             return !(*board)[pos] && !next_state(pos).board->is_capturing(pos);
         }) | ranges::to<std::vector>();

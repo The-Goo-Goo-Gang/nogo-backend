@@ -107,7 +107,7 @@ _EXPORT struct UiMessage : public Message {
         {
             auto rank = contest.current.board->get_rank();
             auto actions = contest.current.available_actions();
-            auto index = BoardBase::index(contest.current.board->get_rank());
+            auto index = contest.current.board->index();
             disabled_positions = index
                 | ranges::views::filter([&](auto pos) { return !(*contest.current.board)[pos] && std::find(actions.begin(), actions.end(), pos) == actions.end(); })
                 | ranges::to<std::vector>();
