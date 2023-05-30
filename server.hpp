@@ -362,8 +362,8 @@ public:
                 // READY_OP should not be sent by local
                 throw std::logic_error("READY_OP should not be sent by local");
             } else {
-                if (contest.status == Contest::Status::ONGOING) {
-                    participant->deliver({ OpCode::REJECT_OP, find_local_participant()->name, "The game is already started" });
+                if (contest.status == Contest::Status::ON_GOING) {
+                    participant->deliver({ OpCode::REJECT_OP, find_local_participant()->get_name(), "The game is already started" });
                     break;
                 }
                 if (my_request.has_value() && participant == my_request->receiver) {
