@@ -3,13 +3,12 @@
 #include <algorithm>
 #include <array>
 #include <iostream>
+#include <memory>
 #include <nlohmann/json.hpp>
 #include <ranges>
 #include <vector>
 
 #include "utility.hpp"
-
-_EXPORT constexpr inline auto rank_n = 9;
 
 _EXPORT struct Position {
     int x { -1 }, y { -1 };
@@ -54,7 +53,7 @@ _EXPORT struct Role {
     }
     constexpr auto operator<=>(const Role&) const = default;
     constexpr auto operator-() const { return Role(-id); }
-    constexpr explicit operator bool() { return id; }
+    constexpr explicit operator bool() const { return id; }
 
     auto to_string() const -> std::string
     {
@@ -78,10 +77,10 @@ private:
 };
 constexpr Role Role::BLACK { 1 }, Role::WHITE { -1 }, Role::NONE { 0 };
 
-_EXPORT class Board {
-    std::array<Role, rank_n * rank_n> arr;
-
+class BoardBase {
     static constexpr std::array delta { Position { -1, 0 }, Position { 1, 0 }, Position { 0, -1 }, Position { 0, 1 } };
+
+protected:
     auto neighbor(Position p) const
     {
         return delta | std::views::transform([&](auto d) { return p + d; })
@@ -90,22 +89,48 @@ _EXPORT class Board {
     }
 
 public:
-    // constexpr auto operator[](this auto&& self, Position p) { return self.arr[p.x * rank_n + p.y]; }
-    constexpr auto operator[](Position p) -> Role& { return arr[p.x * rank_n + p.y]; }
-    constexpr auto operator[](Position p) const { return arr[p.x * rank_n + p.y]; }
-
-    constexpr bool in_border(Position p) const { return p.x >= 0 && p.y >= 0 && p.x < rank_n && p.y < rank_n; }
-
-    static constexpr auto index()
+    using Board_ptr = std::shared_ptr<BoardBase>;
+    auto to_2dvector() const
     {
-        std::array<Position, rank_n * rank_n> res;
-        for (int i = 0; i < rank_n; i++)
-            for (int j = 0; j < rank_n; j++)
-                res[i * rank_n + j] = { i, j };
+        auto rank = get_rank();
+        std::vector<std::vector<Role>> res;
+        res.resize(rank);
+        for (int i = 0; i < rank; i++) {
+            res[i].resize(rank);
+            for (int j = 0; j < rank; j++) {
+                res[i][j] = (*this)[{ i, j }];
+            }
+        }
         return res;
     }
 
-    auto _liberties(Position p, Board& visit) const -> bool
+    virtual auto index() -> std::vector<Position> = 0;
+
+    virtual Role& operator[](Position p) = 0;
+    virtual Role operator[](Position p) const = 0;
+    virtual auto in_border(Position p) const -> bool = 0;
+
+    virtual bool liberties(Position p) const = 0;
+    virtual bool is_capturing(Position p) const = 0;
+    virtual auto get_rank() const -> int = 0;
+    virtual auto to_string() const -> std::string = 0;
+    virtual Board_ptr clone() const = 0;
+
+    friend auto operator<<(std::ostream& os, const BoardBase& board) -> std::ostream&
+    {
+        os << board.to_string() << std::endl;
+        return os;
+    }
+};
+
+_EXPORT using Board_ptr = std::shared_ptr<BoardBase>;
+
+template <int Rank>
+_EXPORT class Board : public BoardBase, std::enable_shared_from_this<Board<Rank>> {
+private:
+    std::array<Role, Rank * Rank> arr { Role::NONE };
+
+    constexpr auto _liberties(Position p, Board<Rank>& visit) const -> bool
     {
         auto& self { *this };
         visit[p] = Role::BLACK;
@@ -115,20 +140,35 @@ public:
             return !visit[n] && self[n] == self[p]
                 && _liberties(n, visit);
         });
-    };
-    bool liberties(Position p) const
+    }
+
+public:
+    Role& operator[](Position p) override { return arr[p.x * Rank + p.y]; }
+    Role operator[](Position p) const override { return arr[p.x * Rank + p.y]; }
+
+    auto index() -> std::vector<Position> override
+    {
+        std::vector<Position> res;
+        res.reserve(Rank * Rank);
+        for (int i = 0; i < Rank; i++) {
+            for (int j = 0; j < Rank; j++) {
+                res.emplace_back(i, j);
+            }
+        }
+        return res;
+    }
+
+    bool in_border(Position p) const override { return p.x >= 0 && p.y >= 0 && p.x < Rank && p.y < Rank; }
+
+    bool liberties(Position p) const override
     {
         auto& self { *this };
-        Board visit {};
+        Board<Rank> visit {};
         return self._liberties(p, visit);
     }
 
-    // judge whether stones around `p` is captured by `p`
-    // or `p` is captured by stones around `p`
-    bool is_capturing(Position p) const
+    bool is_capturing(Position p) const override
     {
-        // assert(self[p]);
-
         auto& self { *this };
         return !self.liberties(p)
             || std::ranges::any_of(neighbor(p), [&](auto n) {
@@ -137,37 +177,40 @@ public:
                });
     }
 
-    constexpr auto to_2darray() const
+    auto get_rank() const -> int override { return Rank; }
+
+    auto to_string() const -> std::string override
     {
-        std::array<std::array<Role, rank_n>, rank_n> res;
-        for (int i = 0; i < rank_n; i++)
-            for (int j = 0; j < rank_n; j++)
-                res[i][j] = arr[i * rank_n + j];
+        auto& self { *this };
+        std::string res;
+        for (int i = 0; i < Rank; i++) {
+            for (int j = 0; j < Rank; j++) {
+                res += self[{ i, j }].map("B", "W", "-");
+            }
+            res += '\n';
+        }
         return res;
     }
 
-    friend auto operator<<(std::ostream& os, const Board& board) -> std::ostream&
+    Board_ptr clone() const override
     {
-        auto arr = board.to_2darray();
-        for (int i = 0; i < rank_n; i++) {
-            for (int j = 0; j < rank_n; j++)
-                os << arr[i][j].map("B", "W", "-");
-            os << std::endl;
-        }
-        return os;
+        auto& self { *this };
+        auto res = std::make_shared<Board<Rank>>(self);
+        return res;
     }
 };
 
 _EXPORT struct State {
-    Board board;
-    Role role;
-    Position last_move;
+    Board_ptr board {};
+    Role role {};
+    Position last_move {};
 
-    constexpr State(Role role = Role::BLACK)
-        : role(role)
+    State(Board_ptr board = std::make_shared<Board<9>>(), Role role = Role::BLACK)
+        : board(board)
+        , role(role)
     {
     }
-    State(Board board, Role role, Position last_move)
+    State(Board_ptr board, Role role, Position last_move)
         : board(board)
         , role(role)
         , last_move(last_move)
@@ -176,22 +219,22 @@ _EXPORT struct State {
 
     auto next_state(Position p) const
     {
-        State state { board, -role, p };
-        state.board[p] = role;
+        State state { board->clone(), -role, p };
+        (*state.board)[p] = role;
         return state;
     }
 
     auto available_actions() const
     {
-        auto index = Board::index();
+        auto index = board->index();
         return index | ranges::views::filter([&](auto pos) {
-            return !board[pos] && !next_state(pos).board.is_capturing(pos);
+            return !(*board)[pos] && !next_state(pos).board->is_capturing(pos);
         }) | ranges::to<std::vector>();
     }
 
     constexpr auto is_over() const
     {
-        if (last_move && board.is_capturing(last_move)) // win
+        if (last_move && board->is_capturing(last_move)) // win
             return role;
         /*
         if (!available_actions().size()) // lose
