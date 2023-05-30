@@ -78,8 +78,6 @@ private:
 constexpr Role Role::BLACK { 1 }, Role::WHITE { -1 }, Role::NONE { 0 };
 
 class BoardBase {
-    using Board_ptr = std::shared_ptr<BoardBase>;
-
     static constexpr std::array delta { Position { -1, 0 }, Position { 1, 0 }, Position { 0, -1 }, Position { 0, 1 } };
 
 protected:
@@ -91,6 +89,8 @@ protected:
     }
 
 public:
+    using Board_ptr = std::shared_ptr<BoardBase>;
+
     static auto index(const int& rank) -> std::vector<Position>
     {
         std::vector<Position> res;
@@ -122,6 +122,7 @@ public:
     virtual bool is_capturing(Position p) const = 0;
     virtual auto get_rank() const -> int = 0;
     virtual auto to_string() const -> std::string = 0;
+    virtual Board_ptr clone() const = 0;
 
     friend auto operator<<(std::ostream& os, const BoardBase& board) -> std::ostream&
     {
@@ -186,6 +187,13 @@ public:
         }
         return res;
     }
+
+    Board_ptr clone() const override
+    {
+        auto& self { *this };
+        auto res = std::make_shared<Board<Rank>>(self);
+        return res;
+    }
 };
 
 _EXPORT struct State {
@@ -207,20 +215,7 @@ _EXPORT struct State {
 
     auto next_state(Position p) const
     {
-        State state { nullptr, -role, p };
-        switch (board->get_rank()) {
-        case 9:
-            state.board = std::make_shared<Board<9>>(*std::dynamic_pointer_cast<Board<9>>(board));
-            break;
-        case 11:
-            state.board = std::make_shared<Board<11>>(*std::dynamic_pointer_cast<Board<11>>(board));
-            break;
-        case 13:
-            state.board = std::make_shared<Board<13>>(*std::dynamic_pointer_cast<Board<13>>(board));
-            break;
-        default:
-            throw std::runtime_error("invalid rank");
-        }
+        State state { board->clone(), -role, p };
         (*state.board)[p] = role;
         return state;
     }
