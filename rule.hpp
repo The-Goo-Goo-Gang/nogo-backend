@@ -53,7 +53,6 @@ _EXPORT struct Role {
     }
     constexpr auto operator<=>(const Role&) const = default;
     constexpr auto operator-() const { return Role(-id); }
-    constexpr explicit operator bool() { return id; }
     constexpr explicit operator bool() const { return id; }
 
     auto to_string() const -> std::string
