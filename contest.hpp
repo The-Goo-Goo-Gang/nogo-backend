@@ -172,6 +172,7 @@ public:
     };
 
     bool should_giveup {};
+    int board_size { 9 };
 
     State current {};
     std::vector<Position> moves;
@@ -183,16 +184,46 @@ public:
     std::chrono::system_clock::time_point start_time;
     std::chrono::system_clock::time_point end_time;
     Role local_role { Role::NONE };
+    bool is_replaying {};
 
+private:
+    void _set_board_size(int size)
+    {
+        switch (size) {
+        case 9:
+            current.board = std::make_shared<Board<9>>();
+            break;
+        case 11:
+            current.board = std::make_shared<Board<11>>();
+            break;
+        case 13:
+            current.board = std::make_shared<Board<13>>();
+            break;
+        default:
+            throw std::logic_error { "not supported size" };
+            break;
+        }
+        board_size = size;
+    }
+
+public:
+    void set_board_size(int size)
+    {
+        if (status != Status::NOT_PREPARED)
+            throw StatusError { "Contest already started" };
+        _set_board_size(size);
+    }
     void clear()
     {
         current = {};
+        _set_board_size(board_size);
         moves.clear();
         players = {};
         status = {};
         result = {};
         should_giveup = false;
         local_role = Role::NONE;
+        is_replaying = false;
     }
     void confirm()
     {
@@ -222,7 +253,7 @@ public:
             throw StatusError { "Contest not started" };
         if (current.role != player.role)
             throw std::logic_error { player.name + " not allowed to play" };
-        if (current.board[pos]) {
+        if ((*current.board)[pos]) {
             status = Status::GAME_OVER;
             result = { -player.role, WinType::SUICIDE };
             logger->warn("Play on occupied position {}, playerdata: {}", pos.to_string(), player.to_string());
@@ -273,6 +304,6 @@ public:
                                                                     : "";
         auto moves_str = moves | std::views::transform([](auto pos) { return pos.to_string(); });
         return (moves_str | ranges::views::join_with(delimiter) | ranges::to<std::string>())
-            + delimiter + terminator;
+            + (terminator.empty() ? "" : (delimiter + terminator));
     }
 };
