@@ -70,11 +70,9 @@ struct MCTSNode : std::enable_shared_from_this<MCTSNode> {
             return node;
         }
 
-        auto state { node->state };
-        if (node->children.size() < node->state.available_actions().size()) {
-            auto actions { state.available_actions() };
-            auto action { actions[node->children.size()] };
-            return node->add_child(state.next_state(action));
+        if (node->children.size() < node->available_actions.size()) {
+            auto action { node->available_actions[node->children.size()] };
+            return node->add_child(node->state.next_state(action));
         }
 
         return node->best_child(C)->tree_policy(C);
@@ -99,11 +97,11 @@ struct MCTSNode : std::enable_shared_from_this<MCTSNode> {
     {
         auto node { shared_from_this() };
 
+        node->available_actions = node->state.available_actions();
+        int n3 = node->available_actions.size();
         auto state { node->state };
-        int n3 = state.available_actions().size();
         state.role = -state.role;
         int n4 = state.available_actions().size();
-        state.role = -state.role;
         return n4 - n3;
     }
 
