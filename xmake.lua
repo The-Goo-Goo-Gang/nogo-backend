@@ -19,7 +19,7 @@ target("nogo")
 
 target("test")
     set_kind("binary")
-    add_packages("asio","spdlog","gtest")
+    add_packages("asio","spdlog","gtest","nlohmann_json")
     add_packages("range-v3", "fmt")
     add_files("test/test.cpp")
     set_basename("nogo-test")

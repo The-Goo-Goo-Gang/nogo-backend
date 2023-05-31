@@ -7,9 +7,9 @@
 #include <cmath>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <random>
 #include <vector>
-#include <optional>
 
 #include "rule.hpp"
 
@@ -26,12 +26,17 @@ struct MCTSNode : std::enable_shared_from_this<MCTSNode> {
 
     State state {};
     std::vector<Position> available_actions {};
-    MCTSNode_ptr parent;
+    std::weak_ptr<MCTSNode> parent;
     std::vector<MCTSNode_ptr> children {};
     int visit { 0 };
     double quality { 0 };
 
-    MCTSNode(const State& state, MCTSNode_ptr parent = nullptr)
+    MCTSNode(const State& state)
+        : state(state)
+    {
+    }
+
+    MCTSNode(const State& state, std::weak_ptr<MCTSNode> parent)
         : state(state)
         , parent(parent)
     {
@@ -39,7 +44,7 @@ struct MCTSNode : std::enable_shared_from_this<MCTSNode> {
 
     auto add_child(const State& state)
     {
-        auto child = std::make_shared<MCTSNode>(state, shared_from_this());
+        auto child = std::make_shared<MCTSNode>(state, weak_from_this());
         children.push_back(child);
         return child;
     }
@@ -81,12 +86,13 @@ struct MCTSNode : std::enable_shared_from_this<MCTSNode> {
         auto node { shared_from_this() };
 
         State state = node->state;
-        while (!state.is_over()) {
-            auto actions = state.available_actions();
+        auto actions = state.available_actions();
+        while (!state.is_over() && actions.size()) {
             int index = (int)actions.size() * dist(rng);
             state = state.next_state(actions[index]);
+            auto actions = state.available_actions();
         }
-        return state.is_over() == -node->state.role;
+        return (state.is_over() ? state.role : -state.role) == -node->state.role;
     }
 
     double default_policy2()
@@ -104,12 +110,13 @@ struct MCTSNode : std::enable_shared_from_this<MCTSNode> {
     // backpropagate the result of the simulation
     void backup(double reward)
     {
-        auto node { shared_from_this() };
+        auto weaknode { weak_from_this() };
 
-        while (node) {
+        while (!weaknode.expired()) {
+            auto node = weaknode.lock();
             node->visit++;
             node->quality += reward;
-            node = node->parent;
+            weaknode = node->parent;
             reward = -reward;
         }
     }
@@ -135,6 +142,23 @@ _EXPORT constexpr auto mcts_bot_player_generator(double C)
             return std::nullopt;
         }
         return root->best_child(C)->state.last_move;
+    };
+}
+
+_EXPORT constexpr auto mcts_bot_player_generator_1(double C)
+{
+    return [=](const State& state) -> std::optional<Position> {
+        auto start = chrono::high_resolution_clock::now();
+        auto root = std::make_shared<MCTSNode>(state);
+        while (chrono::high_resolution_clock::now() - start < 1500ms) {
+            auto expand_node = root->tree_policy(C);
+            double reward = expand_node->default_policy();
+            expand_node->backup(reward);
+        }
+        if (!root->children.size()) {
+            return std::nullopt;
+        }
+        return root->best_child(0)->state.last_move;
     };
 }
 
