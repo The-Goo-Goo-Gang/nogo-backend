@@ -299,10 +299,13 @@ public:
         }
         case OpCode::REPLAY_START_MOVE_OP: {
             // data1: current moves
+            // data2: board size
             if (contest.status == Contest::Status::ON_GOING) {
                 throw std::logic_error("contest already started");
             }
+            auto size { stoi(data2) };
             contest.clear();
+            contest.set_board_size(size);
             Player player1 { participant, "BLACK", Role::BLACK, PlayerType::LOCAL_HUMAN_PLAYER },
                 player2 { participant, "WHITE", Role::WHITE, PlayerType::LOCAL_HUMAN_PLAYER };
             contest.enroll(std::move(player1)), contest.enroll(std::move(player2));
