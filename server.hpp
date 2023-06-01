@@ -303,7 +303,7 @@ public:
             if (contest.status == Contest::Status::ON_GOING) {
                 throw std::logic_error("contest already started");
             }
-            auto size { std::stoi(data2) };
+            auto size { stoi(data2) };
             contest.clear();
             contest.set_board_size(size);
             Player player1 { participant, "BLACK", Role::BLACK, PlayerType::LOCAL_HUMAN_PLAYER },
