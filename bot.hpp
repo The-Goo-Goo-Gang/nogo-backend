@@ -134,7 +134,7 @@ _EXPORT constexpr auto mcts_bot_player_generator(double C)
         if (!root->children.size()) {
             return std::nullopt;
         }
-        return root->best_child(C)->state.last_move;
+        return root->best_child(0)->state.last_move;
     };
 }
 
