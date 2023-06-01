@@ -287,7 +287,7 @@ public:
     {
         if (status != Status::ON_GOING)
             throw StatusError { "Contest not started" };
-        if (players.at(current.role) != player)
+        if (current.role != player.role)
             throw std::logic_error { "not in " + player.name + "'s turn" };
         status = Status::GAME_OVER;
         result = { -player.role, WinType::TIMEOUT };
