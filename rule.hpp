@@ -113,7 +113,7 @@ public:
     virtual int find(int i) const = 0;
     virtual bool has_liberties(Position p) const = 0;
     virtual void merge(int i, int j) = 0;
-    virtual void put(Position p, Role r) = 0;
+    virtual bool put(Position p, Role r) = 0;
     virtual bool is_capturing(Position p) const = 0;
     virtual auto get_rank() const -> int = 0;
     virtual auto to_string() const -> std::string = 0;
@@ -196,12 +196,14 @@ public:
         }
     }
 
-    void put(Position i, Role r) override
+    bool put(Position i, Role r) override
     {
         auto& self { *this };
         self[i] = r;
+        auto neighbors = neighbor(i);
         int empty_around { 0 };
-        for (auto ni : neighbor(i)) {
+        
+        for (auto ni : neighbors) {
             if (!self[ni])
                 empty_around++;
             else {
@@ -210,11 +212,16 @@ public:
             }
         }
         liberties[i.x * Rank + i.y] = empty_around;
-        for (auto ni : neighbor(i)) {
-            if (self[ni] == self[i]) {
+        for (auto ni : neighbors) {
+            if (self[ni] == self[i]) { 
                 merge(i.x * Rank + i.y, ni.x * Rank + ni.y);
             }
         }
+        return !self.has_liberties(i)
+            || std::ranges::any_of(neighbor(i), [&](auto n) {
+                   return self[n] == -self[i]
+                       && !self.has_liberties(n);
+               });
     }
 
     bool is_capturing(Position p) const override
@@ -273,15 +280,22 @@ _EXPORT struct State {
         return state;
     }
 
+    auto try_move(Position p) const
+    {
+        State state { board->clone(), -role, p };
+        return state.board->put(p, role);
+    }
+
     auto available_actions() const
     {
         auto index = board->index();
         auto i = index | ranges::views::filter([&](auto pos) {
-            return !(*board)[pos] && !next_state(pos).board->is_capturing(pos);
+            return !(*board)[pos] && !try_move(pos);
         }) | ranges::to<std::vector>();
         return i;
     }
 
+    [[deprecated("try_move could return the result")]] 
     constexpr auto is_over() const
     {
         if (last_move && board->is_capturing(last_move)) // win
