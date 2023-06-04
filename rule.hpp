@@ -148,7 +148,7 @@ private:
     }
 
 public:
-    Board<Rank>()
+    Board()
     {
         for (int i = 0; i < Rank * Rank; i++) {
             parent[i] = i;
@@ -202,7 +202,7 @@ public:
         self[i] = r;
         auto neighbors = neighbor(i);
         int empty_around { 0 };
-        
+
         for (auto ni : neighbors) {
             if (!self[ni])
                 empty_around++;
@@ -213,7 +213,7 @@ public:
         }
         liberties[i.x * Rank + i.y] = empty_around;
         for (auto ni : neighbors) {
-            if (self[ni] == self[i]) { 
+            if (self[ni] == self[i]) {
                 merge(i.x * Rank + i.y, ni.x * Rank + ni.y);
             }
         }
@@ -295,8 +295,7 @@ _EXPORT struct State {
         return i;
     }
 
-    [[deprecated("try_move could return the result")]] 
-    constexpr auto is_over() const
+    [[deprecated("try_move could return the result")]] constexpr auto is_over() const
     {
         if (last_move && board->is_capturing(last_move)) // win
             return role;
