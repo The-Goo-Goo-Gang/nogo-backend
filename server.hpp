@@ -198,11 +198,11 @@ class Room {
             std::lock_guard<std::mutex> guard(bot_mutex);
             logger->info("bot start calcing move, role = {}", role.map("b", "w", "-"));
             auto pos = mcts_bot_player(state);
-            if (pos.has_value()) {
-                logger->info("bot finish calcing move, role = {}, pos = {}", role.map("b", "w", "-"), pos->to_string());
+            if (contest.current.board->in_border(pos)) {
+                logger->info("bot finish calcing move, role = {}, pos = {}", role.map("b", "w", "-"), pos.to_string());
                 if (should_bot_move(participant, role)) {
-                    if (do_move(participant, pos.value(), role, is_local_game)) {
-                        deliver_to_others({ OpCode::MOVE_OP, pos->to_string() }, participant);
+                    if (do_move(participant, pos, role, is_local_game)) {
+                        deliver_to_others({ OpCode::MOVE_OP, pos.to_string() }, participant);
                     }
                 }
             } else {
