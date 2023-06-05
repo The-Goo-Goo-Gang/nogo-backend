@@ -48,8 +48,16 @@ _EXPORT struct Player {
     }
     friend std::ostream& operator<<(std::ostream& os, const Player& player)
     {
-        return os << fmt::format("ip:{}, name:{}, role:{}, type:{}",
+        return os << fmt::format("",
                    to_string(*player.participant), player.name, player.role.to_string(), std::to_underlying(player.type));
+    }
+};
+
+template <>
+struct fmt::formatter<Player> : fmt::formatter<std::string> {
+    auto format(const Player& player, format_context& ctx)
+    {
+        return format_to(ctx.out(), "[Player name: {}, role: {}, type: {}]", player.name, player.role, player.type);
     }
 };
 

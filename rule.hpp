@@ -78,6 +78,14 @@ private:
 };
 constexpr Role Role::BLACK { 1 }, Role::WHITE { -1 }, Role::NONE { 0 };
 
+template <>
+struct fmt::formatter<Role> : fmt::formatter<std::string> {
+    auto format(Role role, format_context& ctx)
+    {
+        return format_to(ctx.out(), "[{}]", role.map("b", "w", "-"));
+    }
+};
+
 _EXPORT class Board {
     std::array<Role, rank_n * rank_n> arr;
 

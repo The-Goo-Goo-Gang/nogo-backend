@@ -121,7 +121,7 @@ _EXPORT constexpr auto mcts_bot_player_generator(double C)
 {
     return [=](const State& state) {
         auto start = chrono::high_resolution_clock::now();
-        auto root = std::make_shared<MCTSNode>(state);
+        auto root = std::make_shared <MCTSNode>(state);
         while (chrono::high_resolution_clock::now() - start < 990ms) {
             auto expand_node = root->tree_policy(C);
             double reward = expand_node->default_policy2();

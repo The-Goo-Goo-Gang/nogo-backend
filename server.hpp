@@ -15,6 +15,8 @@
 #include <asio/use_awaitable.hpp>
 #include <asio/write.hpp>
 
+#include <magic_enum.hpp>
+
 #include <algorithm>
 #include <chrono>
 #include <deque>
@@ -153,6 +155,14 @@ public:
     void receive_request_result(string_view, string_view)
     {
         throw std::logic_error { "Participant should not send receive_request_result" };
+    }
+};
+
+template <>
+struct fmt::formatter<Participant> : fmt::formatter<std::string> {
+    auto format(const Participant& participant, format_context& ctx)
+    {
+        return format_to(ctx.out(), "[Participant {} with {}]", ::to_string(participant.endpoint()), participant.player);
     }
 };
 
