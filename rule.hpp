@@ -110,7 +110,10 @@ public:
     virtual Role operator[](Position p) const = 0;
     virtual auto in_border(Position p) const -> bool = 0;
 
-    virtual bool liberties(Position p) const = 0;
+    virtual int find(int i) const = 0;
+    virtual bool has_liberties(Position p) const = 0;
+    virtual void merge(int i, int j) = 0;
+    virtual bool put(Position p, Role r) = 0;
     virtual bool is_capturing(Position p) const = 0;
     virtual auto get_rank() const -> int = 0;
     virtual auto to_string() const -> std::string = 0;
@@ -129,6 +132,8 @@ template <int Rank>
 _EXPORT class Board : public BoardBase, std::enable_shared_from_this<Board<Rank>> {
 private:
     std::array<Role, Rank * Rank> arr { Role::NONE };
+    mutable std::array<int, Rank * Rank> parent { 0 };
+    std::array<int, Rank * Rank> liberties;
 
     constexpr auto _liberties(Position p, Board<Rank>& visit) const -> bool
     {
@@ -143,6 +148,12 @@ private:
     }
 
 public:
+    Board()
+    {
+        for (int i = 0; i < Rank * Rank; i++) {
+            parent[i] = i;
+        }
+    }
     Role& operator[](Position p) override { return arr[p.x * Rank + p.y]; }
     Role operator[](Position p) const override { return arr[p.x * Rank + p.y]; }
 
@@ -160,20 +171,66 @@ public:
 
     bool in_border(Position p) const override { return p.x >= 0 && p.y >= 0 && p.x < Rank && p.y < Rank; }
 
-    bool liberties(Position p) const override
+    int find(int i) const override
+    {
+        if (parent[i] == i) {
+            return i;
+        }
+        return parent[i] = find(parent[i]);
+    }
+
+    bool has_liberties(Position i) const override
+    {
+        int pi = find(i.x * Rank + i.y);
+        return liberties[pi];
+    }
+
+    void merge(int i, int j) override
+    {
+        int pi = find(i);
+        int pj = find(j);
+        if (pi != pj) {
+            parent[pj] = pi;
+            liberties[pi] += liberties[pj];
+            liberties[pj] = 0;
+        }
+    }
+
+    bool put(Position i, Role r) override
     {
         auto& self { *this };
-        Board<Rank> visit {};
-        return self._liberties(p, visit);
+        self[i] = r;
+        auto neighbors = neighbor(i);
+        int empty_around { 0 };
+
+        for (auto ni : neighbors) {
+            if (!self[ni])
+                empty_around++;
+            else {
+                int pj = find(ni.x * Rank + ni.y);
+                liberties[pj]--;
+            }
+        }
+        liberties[i.x * Rank + i.y] = empty_around;
+        for (auto ni : neighbors) {
+            if (self[ni] == self[i]) {
+                merge(i.x * Rank + i.y, ni.x * Rank + ni.y);
+            }
+        }
+        return !self.has_liberties(i)
+            || std::ranges::any_of(neighbor(i), [&](auto n) {
+                   return self[n] == -self[i]
+                       && !self.has_liberties(n);
+               });
     }
 
     bool is_capturing(Position p) const override
     {
         auto& self { *this };
-        return !self.liberties(p)
+        return !self.has_liberties(p)
             || std::ranges::any_of(neighbor(p), [&](auto n) {
                    return self[n] == -self[p]
-                       && !self.liberties(n);
+                       && !self.has_liberties(n);
                });
     }
 
@@ -194,8 +251,7 @@ public:
 
     Board_ptr clone() const override
     {
-        auto& self { *this };
-        auto res = std::make_shared<Board<Rank>>(self);
+        Board_ptr res = std::make_shared<Board<Rank>>(*this);
         return res;
     }
 };
@@ -220,19 +276,26 @@ _EXPORT struct State {
     auto next_state(Position p) const
     {
         State state { board->clone(), -role, p };
-        (*state.board)[p] = role;
+        state.board->put(p, role);
         return state;
+    }
+
+    auto try_move(Position p) const
+    {
+        State state { board->clone(), -role, p };
+        return state.board->put(p, role);
     }
 
     auto available_actions() const
     {
         auto index = board->index();
-        return index | ranges::views::filter([&](auto pos) {
-            return !(*board)[pos] && !next_state(pos).board->is_capturing(pos);
+        auto i = index | ranges::views::filter([&](auto pos) {
+            return !(*board)[pos] && !try_move(pos);
         }) | ranges::to<std::vector>();
+        return i;
     }
 
-    constexpr auto is_over() const
+    [[deprecated("try_move could return the result")]] constexpr auto is_over() const
     {
         if (last_move && board->is_capturing(last_move)) // win
             return role;
