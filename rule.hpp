@@ -129,10 +129,11 @@ public:
 _EXPORT using Board_ptr = std::shared_ptr<BoardBase>;
 
 template <int Rank>
-_EXPORT class Board : public BoardBase, std::enable_shared_from_this<Board<Rank>> {
+_EXPORT class Board : public BoardBase, public std::enable_shared_from_this<Board<Rank>> {
 private:
-    std::array<Role, Rank * Rank> arr { Role::NONE };
-    mutable std::array<int, Rank * Rank> parent { 0 };
+    std::array<Role, Rank * Rank> arr;
+
+    mutable std::array<int, Rank * Rank> parent;
     std::array<int, Rank * Rank> liberties;
 
     constexpr auto _liberties(Position p, Board<Rank>& visit) const -> bool
@@ -251,8 +252,7 @@ public:
 
     Board_ptr clone() const override
     {
-        Board_ptr res = std::make_shared<Board<Rank>>(*this);
-        return res;
+        return std::make_shared<Board<Rank>>(*this->shared_from_this());
     }
 };
 
@@ -289,10 +289,9 @@ _EXPORT struct State {
     auto available_actions() const
     {
         auto index = board->index();
-        auto i = index | ranges::views::filter([&](auto pos) {
+        return index | ranges::views::filter([&](auto pos) {
             return !(*board)[pos] && !try_move(pos);
         }) | ranges::to<std::vector>();
-        return i;
     }
 
     [[deprecated("try_move could return the result")]] constexpr auto is_over() const
