@@ -123,7 +123,7 @@ _EXPORT Position random_bot_player(const State& state)
 
 _EXPORT constexpr auto mcts_bot_player_generator(double C)
 {
-    return [=](const State& state) -> std::optional<Position> {
+    return [=](const State& state) -> Position {
         auto start = chrono::high_resolution_clock::now();
         auto root = std::make_shared<MCTSNode>(state);
         while (chrono::high_resolution_clock::now() - start < 1500ms) {
@@ -132,7 +132,7 @@ _EXPORT constexpr auto mcts_bot_player_generator(double C)
             expand_node->backup(reward);
         }
         if (!root->children.size()) {
-            return std::nullopt;
+            return Position {};
         }
         return root->best_child(0)->state.last_move;
     };

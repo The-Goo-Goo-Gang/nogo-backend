@@ -158,7 +158,7 @@ const vector<vector<string>> recv_msgs1 {
 const vector<vector<string>> recv_msgs2 {
     {},
     {},
-    { R"({"data1":"Player1","data2":"b","op":200000})" },
+    { R"({"data1":"Player1","data2":"","op":200000})" },
     {},
 
     { R"({"data1":"A1","data2":"1683446065123","op":200002})" },
