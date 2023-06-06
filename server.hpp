@@ -61,7 +61,7 @@ using std::chrono::system_clock;
 
 using std::operator""sv;
 
-constexpr auto TIMEOUT { 30s };
+static auto TIMEOUT { 30s };
 
 class Room;
 
@@ -427,11 +427,13 @@ public:
             break;
         }
 
-        case OpCode::UPDATE_USERNAME_OP: {
+        case OpCode::SYNC_ONLINE_SETTINGS_OP: {
             if (!participant->is_local) {
-                throw std::logic_error { "remote participant should not send UPDATE_USERNAME_OP" };
+                throw std::logic_error { "remote participant should not send SYNC_ONLINE_SETTINGS_OP" };
             }
             receive_participant_name(participant, data1);
+            std::chrono::seconds duration { stoi(data2) };
+            TIMEOUT = duration;
             break;
         }
 
@@ -512,17 +514,17 @@ public:
                 // READY_OP should not be sent by local
                 throw std::logic_error("READY_OP should not be sent by local");
             } else {
-                    // receive request reply
-                    if (contest.status == Contest::Status::ON_GOING) {
-                        return;
-                    }
-                    if (my_request.has_value() && participant == my_request->receiver) {
-                        deliver_to_local({ OpCode::RECEIVE_REQUEST_RESULT_OP, "accepted", name });
-                        // contest accepted, enroll players
-                        enroll_players(my_request.value());
-                        reject_all_received_requests(my_request->receiver);
-                        // TODO: catch exceptions when enrolling players
-                        my_request = std::nullopt;
+                // receive request reply
+                if (contest.status == Contest::Status::ON_GOING) {
+                    return;
+                }
+                if (my_request.has_value() && participant == my_request->receiver) {
+                    deliver_to_local({ OpCode::RECEIVE_REQUEST_RESULT_OP, "accepted", name });
+                    // contest accepted, enroll players
+                    enroll_players(my_request.value());
+                    reject_all_received_requests(my_request->receiver);
+                    // TODO: catch exceptions when enrolling players
+                    my_request = std::nullopt;
                 } else {
                     // receive request
                     if (contest.status == Contest::Status::ON_GOING) {
@@ -531,8 +533,8 @@ public:
                     }
                     receive_new_request({ participant, find_local_participant(), role });
                 }
-            deliver_ui_state();
-            break;
+                deliver_ui_state();
+                break;
             }
         }
         case OpCode::REJECT_OP: {
