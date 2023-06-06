@@ -198,11 +198,11 @@ class Room {
             std::lock_guard<std::mutex> guard(bot_mutex);
             logger->info("bot start calcing move, role = {}", role.map("b", "w", "-"));
             auto pos = mcts_bot_player(state);
-            if (pos.has_value()) {
-                logger->info("bot finish calcing move, role = {}, pos = {}", role.map("b", "w", "-"), pos->to_string());
+            if (contest.current.board->in_border(pos)) {
+                logger->info("bot finish calcing move, role = {}, pos = {}", role.map("b", "w", "-"), pos.to_string());
                 if (should_bot_move(participant, role)) {
-                    if (do_move(participant, pos.value(), role, is_local_game)) {
-                        deliver_to_others({ OpCode::MOVE_OP, pos->to_string() }, participant);
+                    if (do_move(participant, pos, role, is_local_game)) {
+                        deliver_to_others({ OpCode::MOVE_OP, pos.to_string() }, participant);
                     }
                 }
             } else {
@@ -235,6 +235,8 @@ class Room {
 
     void receive_new_request(const ContestRequest& request)
     {
+        logger->debug("receive_new_request: sender = {}, receiver = {}, role = {}", request.sender->to_string(), request.receiver->to_string(), request.role.map("b", "w", "-"));
+
         if (received_requests.empty()) {
             deliver_to_local({ OpCode::RECEIVE_REQUEST_OP, request.sender->get_name(), request.role.map("b", "w", "") });
         }
@@ -243,6 +245,8 @@ class Room {
 
     void enroll_players(ContestRequest& request)
     {
+        logger->debug("enroll_players: sender = {}, receiver = {}, role = {}", request.sender->to_string(), request.receiver->to_string(), request.role.map("b", "w", "-"));
+
         contest.clear();
         contest.set_board_size(9);
         contest.duration = TIMEOUT;
@@ -252,9 +256,12 @@ class Room {
         contest.local_role = request.sender->is_local ? request.role : -request.role;
     }
 
-    void reject_all_received_requests()
+    void reject_all_received_requests(Participant_ptr participant = nullptr)
     {
-        ranges::for_each(received_requests, [](auto& r) { r.sender->deliver({ OpCode::REJECT_OP, r.receiver->get_name() }); });
+        std::string_view name { participant == nullptr ? "" : participant->get_name() };
+        logger->debug("reject_all_received_requests");
+
+        ranges::for_each(received_requests, [=](auto& r) { if (name != r.sender->get_name()) r.sender->deliver({ OpCode::REJECT_OP, r.receiver->get_name(), "Already accepted other request" }); });
         received_requests.clear();
     }
 
@@ -471,10 +478,11 @@ public:
             if (received_requests.empty()) {
                 throw std::logic_error { "received_requests.empty()" };
             }
+            logger->info("accept request");
             auto request = received_requests.front();
             received_requests.pop_front();
-            reject_all_received_requests();
-            request.sender->deliver({ OpCode::READY_OP, request.receiver->get_name(), (-request.role).map("b", "w", "") });
+            reject_all_received_requests(request.sender);
+            request.sender->deliver({ OpCode::READY_OP, request.receiver->get_name(), "" });
             enroll_players(request);
             deliver_ui_state();
             break;
@@ -497,26 +505,32 @@ public:
             logger->info("ready: is_local = {}, data1 = {}, data2 = {}", participant->is_local, data1, data2);
 
             // TODO: warn if invalid name
-            auto name { receive_participant_name(participant, data1) };
+            auto name { receive_participant_name(participant, data1) }; // role is NONE if receive request reply
             Role role { data2 };
 
             if (participant->is_local) {
                 // READY_OP should not be sent by local
                 throw std::logic_error("READY_OP should not be sent by local");
             } else {
-                if (contest.status == Contest::Status::ON_GOING) {
-                    participant->deliver({ OpCode::REJECT_OP, find_local_participant()->get_name(), "Contest already started" });
-                    return;
-                }
-                if (my_request.has_value() && participant == my_request->receiver) {
-                    deliver_to_local({ OpCode::RECEIVE_REQUEST_RESULT_OP, "accepted", name });
-                    // contest accepted, enroll players
-                    enroll_players(my_request.value());
-                    // TODO: catch exceptions when enrolling players
-                    my_request = std::nullopt;
-                    reject_all_received_requests();
+                if (role == Role::NONE) {
+                    // receive request reply
+                    if (contest.status == Contest::Status::ON_GOING) {
+                        return;
+                    }
+                    if (my_request.has_value() && participant == my_request->receiver) {
+                        deliver_to_local({ OpCode::RECEIVE_REQUEST_RESULT_OP, "accepted", name });
+                        // contest accepted, enroll players
+                        enroll_players(my_request.value());
+                        reject_all_received_requests(my_request->receiver);
+                        // TODO: catch exceptions when enrolling players
+                        my_request = std::nullopt;
+                    }
                 } else {
                     // receive request
+                    if (contest.status == Contest::Status::ON_GOING) {
+                        participant->deliver({ OpCode::REJECT_OP, find_local_participant()->get_name(), "Contest already started" });
+                        return;
+                    }
                     receive_new_request({ participant, find_local_participant(), role });
                 }
             }
@@ -524,9 +538,12 @@ public:
             break;
         }
         case OpCode::REJECT_OP: {
-            contest.reject();
-
             auto name { receive_participant_name(participant, data1) };
+
+            if (!my_request.has_value() || my_request->receiver != participant)
+                return;
+
+            contest.reject();
 
             if (participant->is_local) {
                 // REJECT_OP should not be sent by local
