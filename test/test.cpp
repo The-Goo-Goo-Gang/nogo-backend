@@ -115,7 +115,7 @@ auto launch_client(asio::io_context& io_context, string_view ip, string_view por
 }
 
 const vector<vector<string>> send_msgs1 {
-    { R"({"op":100011,"data1":"Player1","data2":""})" },
+    { R"({"op":100011,"data1":"Player1","data2":"30"})" },
     { R"({"op":100015,"data1":"","data2":""})" },
 
     { R"({"op":200002,"data1":"A1","data2":"1683446065123"})" },
