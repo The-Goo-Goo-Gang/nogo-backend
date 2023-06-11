@@ -6,6 +6,7 @@
 #include <memory>
 #include <nlohmann/json.hpp>
 #include <ranges>
+#include <sstream>
 #include <vector>
 
 #include "utility.hpp"
@@ -77,6 +78,9 @@ private:
 };
 constexpr Role Role::BLACK { 1 }, Role::WHITE { -1 }, Role::NONE { 0 };
 
+class BoardBase;
+_EXPORT using Board_ptr = std::shared_ptr<BoardBase>;
+
 class BoardBase {
     static constexpr std::array delta { Position { -1, 0 }, Position { 1, 0 }, Position { 0, -1 }, Position { 0, 1 } };
 
@@ -87,9 +91,10 @@ protected:
             | std::views::filter([&](auto p) { return in_border(p); })
             | ranges::to<std::vector>();
     }
+    virtual void merge(int i, int j) = 0;
+    virtual bool put(Position p, Role r) = 0;
 
 public:
-    using Board_ptr = std::shared_ptr<BoardBase>;
     auto to_2dvector() const
     {
         auto rank = get_rank();
@@ -112,8 +117,6 @@ public:
 
     virtual int find(int i) const = 0;
     virtual bool has_liberties(Position p) const = 0;
-    virtual void merge(int i, int j) = 0;
-    virtual bool put(Position p, Role r) = 0;
     virtual bool is_capturing(Position p) const = 0;
     virtual auto get_rank() const -> int = 0;
     virtual auto to_string() const -> std::string = 0;
@@ -124,9 +127,9 @@ public:
         os << board.to_string() << std::endl;
         return os;
     }
-};
 
-_EXPORT using Board_ptr = std::shared_ptr<BoardBase>;
+    friend class State;
+};
 
 template <int Rank>
 _EXPORT class Board : public BoardBase, public std::enable_shared_from_this<Board<Rank>> {
@@ -146,44 +149,6 @@ private:
             return !visit[n] && self[n] == self[p]
                 && _liberties(n, visit);
         });
-    }
-
-public:
-    Board()
-    {
-        for (int i = 0; i < Rank * Rank; i++) {
-            parent[i] = i;
-        }
-    }
-    Role& operator[](Position p) override { return arr[p.x * Rank + p.y]; }
-    Role operator[](Position p) const override { return arr[p.x * Rank + p.y]; }
-
-    auto index() -> std::vector<Position> override
-    {
-        std::vector<Position> res;
-        res.reserve(Rank * Rank);
-        for (int i = 0; i < Rank; i++) {
-            for (int j = 0; j < Rank; j++) {
-                res.emplace_back(i, j);
-            }
-        }
-        return res;
-    }
-
-    bool in_border(Position p) const override { return p.x >= 0 && p.y >= 0 && p.x < Rank && p.y < Rank; }
-
-    int find(int i) const override
-    {
-        if (parent[i] == i) {
-            return i;
-        }
-        return parent[i] = find(parent[i]);
-    }
-
-    bool has_liberties(Position i) const override
-    {
-        int pi = find(i.x * Rank + i.y);
-        return liberties[pi];
     }
 
     void merge(int i, int j) override
@@ -225,6 +190,44 @@ public:
                });
     }
 
+public:
+    Board()
+    {
+        for (int i = 0; i < Rank * Rank; i++) {
+            parent[i] = i;
+        }
+    }
+    Role& operator[](Position p) override { return arr[p.x * Rank + p.y]; }
+    Role operator[](Position p) const override { return arr[p.x * Rank + p.y]; }
+
+    auto index() -> std::vector<Position> override
+    {
+        std::vector<Position> res;
+        res.reserve(Rank * Rank);
+        for (int i = 0; i < Rank; i++) {
+            for (int j = 0; j < Rank; j++) {
+                res.emplace_back(i, j);
+            }
+        }
+        return res;
+    }
+
+    bool in_border(Position p) const override { return p.x >= 0 && p.y >= 0 && p.x < Rank && p.y < Rank; }
+
+    int find(int i) const override
+    {
+        if (parent[i] == i) {
+            return i;
+        }
+        return parent[i] = find(parent[i]);
+    }
+
+    bool has_liberties(Position i) const override
+    {
+        int pi = find(i.x * Rank + i.y);
+        return liberties[pi];
+    }
+
     bool is_capturing(Position p) const override
     {
         auto& self { *this };
@@ -240,14 +243,14 @@ public:
     auto to_string() const -> std::string override
     {
         auto& self { *this };
-        std::string res;
+        std::ostringstream oss;
         for (int i = 0; i < Rank; i++) {
             for (int j = 0; j < Rank; j++) {
-                res += self[{ i, j }].map("B", "W", "-");
+                oss << self[{ i, j }].map("B", "W", "-");
             }
-            res += '\n';
+            oss << '\n';
         }
-        return res;
+        return oss.str();
     }
 
     Board_ptr clone() const override
