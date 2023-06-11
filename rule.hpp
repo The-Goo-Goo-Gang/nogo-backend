@@ -6,6 +6,7 @@
 #include <memory>
 #include <nlohmann/json.hpp>
 #include <ranges>
+#include <sstream>
 #include <vector>
 
 #include "utility.hpp"
@@ -240,14 +241,14 @@ public:
     auto to_string() const -> std::string override
     {
         auto& self { *this };
-        std::string res;
+        std::ostringstream oss;
         for (int i = 0; i < Rank; i++) {
             for (int j = 0; j < Rank; j++) {
-                res += self[{ i, j }].map("B", "W", "-");
+                oss << self[{ i, j }].map("B", "W", "-");
             }
-            res += '\n';
+            oss << '\n';
         }
-        return res;
+        return oss.str();
     }
 
     Board_ptr clone() const override
