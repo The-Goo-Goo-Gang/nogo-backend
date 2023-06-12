@@ -294,6 +294,26 @@ _EXPORT struct State {
         }) | ranges::to<std::vector>();
     }
 
+    auto to_net() const
+    {
+        int Rank = board->get_rank();
+        if (Rank != 9)
+            throw std::runtime_error("State to_net do not support multi-way board");
+        float role_black = role == Role::BLACK ? 1.0f : 0.0f;
+        std::vector<float> res;
+        res.resize(4 * Rank * Rank);
+        for (int x = 0; x < Rank; x++) {
+            for (int y = 0; y < Rank; y++) {
+                if ((*board)[Position { x, y }] == Role::BLACK)
+                    res[(0 * Rank + y) * Rank + x] = 1.0f;
+                else if ((*board)[Position { x, y }] == Role::WHITE)
+                    res[(1 * Rank + y) * Rank + x] = 1.0f;
+                res[(2 * Rank + y) * Rank + x] = role_black;
+            }
+        }
+        res[(3 * Rank + last_move.y) * Rank + last_move.x] = 1.0f;
+        return res;
+    }
     [[deprecated("try_move could return the result")]] constexpr auto is_over() const
     {
         if (last_move && board->is_capturing(last_move)) // win

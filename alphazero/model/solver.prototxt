@@ -1,0 +1,9 @@
+net: "net.prototxt"
+type: "SGD"
+base_lr: 0.02
+lr_policy: "step"
+gamma: 0.8
+stepsize: 2000  
+momentum: 0.9
+
+snapshot_prefix: "snapshot/snapshot"

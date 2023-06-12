@@ -1,11 +1,6 @@
 #include ".\bot.hpp "
 #include <functional>
 
-#ifndef CPU_ONLY
-#define CPU_ONLY
-#endif
-#include <caffe/caffe.hpp>
-
 using namespace std;
 
 int Test(int times, std::function<std::optional<Position>(const State&)> BlackBot, std::function<std::optional<Position>(const State&)> WhiteBot)
