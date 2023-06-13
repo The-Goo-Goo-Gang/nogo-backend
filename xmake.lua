@@ -1,6 +1,6 @@
 add_rules("mode.debug", "mode.release")
 
-add_requires("asio", "nlohmann_json","spdlog","gtest","boost","gflags")
+add_requires("asio", "nlohmann_json","spdlog","gtest","boost","gflags","leveldb","hdf5","snappy","glog","protobuf-c","openblas")
 add_requires("range-v3", "fmt")
 set_languages("cxxlatest")
 set_optimize("aggressive")
@@ -9,7 +9,7 @@ set_optimize("aggressive")
 
 target("nogo")
     set_kind("binary")
-    add_packages("asio", "nlohmann_json","spdlog","boost","gflags")
+    add_packages("asio", "nlohmann_json","spdlog","boost","gflags","leveldb","hdf5","snappy","glog","protobuf-c","openblas")
     add_packages("range-v3")
     add_files("nogo.cpp")
     if is_plat("windows") or is_plat("mingw") then
@@ -26,8 +26,9 @@ target("test")
 
 target("train") 
     set_kind("binary")
-    add_packages("asio","spdlog", "nlohmann_json","boost","gflags")
+    add_packages("asio","spdlog", "nlohmann_json","boost","gflags","leveldb","hdf5","snappy","glog","protobuf-c","openblas")
     add_packages("range-v3", "fmt")
     add_includedirs("include")
     add_files("alphazero/train.cpp")
+    -- add_links("lib/*") 
     set_basename("nogo-train")

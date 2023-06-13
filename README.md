@@ -9,6 +9,9 @@
 
 <a href="https://github.com/The-Goo-Goo-Gang/nogo-frontend">前往前端部分仓库</a>
 
+## 特别说明
+这是一个因为caffe不会装，link失败而鸽了的项目，不知道能不能用，大概率有bug
+
 ## docs
 
 ~~在写了在写了~~

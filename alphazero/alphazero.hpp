@@ -1,3 +1,4 @@
+#define NOMINMAX
 #ifndef CPU_ONLY
 #define CPU_ONLY
 #endif
