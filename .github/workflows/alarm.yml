@@ -1,6 +1,7 @@
 name: alarm
 
 on:
+  push:
   schedule:
     - cron: '0 1 * * *'
 
