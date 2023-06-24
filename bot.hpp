@@ -1,10 +1,11 @@
 #pragma once
 #ifndef _EXPORT
 #define _EXPORT
-#endif 
+#endif
 
 #include <chrono>
 #include <cmath>
+#include <iostream>
 #include <memory>
 #include <random>
 #include <vector>
@@ -13,7 +14,6 @@
 
 namespace chrono = std::chrono;
 using namespace std::chrono_literals;
-namespace ranges = std::ranges;
 
 std::mt19937 rng(std::random_device {}());
 std::uniform_real_distribution<double> dist(0, 1);
@@ -25,20 +25,24 @@ struct MCTSNode : std::enable_shared_from_this<MCTSNode> {
 
     State state;
     std::vector<Position> available_actions;
-    MCTSNode_ptr parent;
+    std::weak_ptr<MCTSNode> parent;
     std::vector<MCTSNode_ptr> children;
     int visit { 0 };
     double quality { 0 };
 
-    MCTSNode(const State& state, MCTSNode_ptr parent = nullptr)
+    int reward { 0 };
+
+    MCTSNode(const State& state, std::weak_ptr<MCTSNode> parent = {})
         : state(state)
         , parent(parent)
     {
+        available_actions = state.available_actions();
+        reward = default_policy2();
     }
 
     auto add_child(const State& state)
     {
-        auto child = std::make_shared<MCTSNode>(state, shared_from_this());
+        auto child = std::make_shared<MCTSNode>(state, weak_from_this());
         children.push_back(child);
         return child;
     }
@@ -54,43 +58,23 @@ struct MCTSNode : std::enable_shared_from_this<MCTSNode> {
     // select the node to expand
     auto tree_policy(double C)
     {
-        // if (!node->available_actions.size())
-        //     node->available_actions = node->state.available_actions();
         auto node { shared_from_this() };
 
-        while (!node->state.is_over() && node->children.size() == node->state.available_actions().size()) {
-            node = node->best_child(C);
+        if (!node->available_actions.size()) {
+            return node;
         }
 
-        State state { node->state };
-        if (!state.is_over()) {
-            auto actions { state.available_actions() };
-            auto action { actions[node->children.size()] };
-            node = node->add_child(state.next_state(action));
+        if (node->children.size() < node->available_actions.size()) {
+            auto action { node->available_actions[node->children.size()] };
+            return node->add_child(node->state.next_state(action));
         }
-        return node;
-    }
 
-    // simulate the game from the expanded node
-    double default_policy()
-    {
-        auto node { shared_from_this() };
-
-        State state = node->state;
-        while (!state.is_over()) {
-            auto actions = state.available_actions();
-            int index = (int)actions.size() * dist(rng);
-            state = state.next_state(actions[index]);
-        }
-        return state.is_over() == -node->state.role;
+        return node->best_child(C)->tree_policy(C);
     }
 
     double default_policy2()
     {
-        auto node { shared_from_this() };
-
-        auto state { node->state };
-        int n3 = state.available_actions().size();
+        int n3 = available_actions.size();
         state.role = -state.role;
         int n4 = state.available_actions().size();
         state.role = -state.role;
@@ -98,15 +82,15 @@ struct MCTSNode : std::enable_shared_from_this<MCTSNode> {
     }
 
     // backpropagate the result of the simulation
-    void backup(double reward)
+    void backup()
     {
-        auto node { shared_from_this() };
-
-        while (node) {
+        auto weak_node { weak_from_this() };
+        int temp_reward { reward };
+        while (auto node { weak_node.lock() }) {
             node->visit++;
-            node->quality += reward;
-            node = node->parent;
-            reward = -reward;
+            node->quality += temp_reward;
+            weak_node = node->parent;
+            temp_reward = -temp_reward;
         }
     }
 };
@@ -121,11 +105,13 @@ _EXPORT constexpr auto mcts_bot_player_generator(double C)
 {
     return [=](const State& state) {
         auto start = chrono::high_resolution_clock::now();
-        auto root = std::make_shared <MCTSNode>(state);
-        while (chrono::high_resolution_clock::now() - start < 990ms) {
+        auto root = std::make_shared<MCTSNode>(state);
+        while (chrono::high_resolution_clock::now() - start < 1500ms) {
             auto expand_node = root->tree_policy(C);
-            double reward = expand_node->default_policy2();
-            expand_node->backup(reward);
+            expand_node->backup();
+        }
+        if (!root->children.size()) {
+            return Position {};
         }
         return root->best_child(0)->state.last_move;
     };

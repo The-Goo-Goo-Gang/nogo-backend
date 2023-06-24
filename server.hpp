@@ -20,16 +20,20 @@
 #include <algorithm>
 #include <chrono>
 #include <deque>
+#include <functional>
 #include <iostream>
+#include <mutex>
 #include <optional>
 #include <queue>
 #include <ranges>
 #include <set>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <tuple>
 #include <vector>
 
+#include "bot.hpp"
 #include "contest.hpp"
 #include "log.hpp"
 #include "message.hpp"
@@ -47,6 +51,10 @@ using namespace std::chrono_literals;
 using std::chrono::milliseconds;
 using std::chrono::seconds;
 using std::chrono::system_clock;
+
+using std::operator""sv;
+
+static auto TIMEOUT { 30s };
 
 class Room;
 
@@ -146,7 +154,7 @@ public:
     }
     virtual void chat_username_update(string_view, string_view) = 0;
 
-    virtual void update_username(string_view, string_view) = 0;
+    virtual void sync_online_settings(string_view, string_view) = 0;
     virtual void send_request_by_ip(string_view, string_view) = 0;
     virtual void send_request_by_username(string_view, string_view) = 0;
     virtual void receive_request(string_view, string_view) = 0;
@@ -156,6 +164,12 @@ public:
     {
         throw std::logic_error { "Participant should not send receive_request_result" };
     }
+
+    virtual void replay_start_move(string_view, string_view) = 0;
+    virtual void replay_move(string_view, string_view) = 0;
+    virtual void replay_stop_move(string_view, string_view) = 0;
+
+    virtual void bot_hosting(string_view, string_view) = 0;
 };
 
 template <>
@@ -174,6 +188,7 @@ public:
     std::deque<std::string> chats;
     Participant_ptr my_request;
     std::deque<Participant_ptr> received_requests;
+    std::mutex bot_mutex;
 
     Participant_ptr find_local_participant()
     {
@@ -191,6 +206,113 @@ public:
     void deliver_ui_state()
     {
         deliver_to_local(UiMessage { contest });
+    }
+
+    constexpr auto is_local_contest() -> bool
+    {
+        constexpr std::array<Role, 2> roles { Role::BLACK, Role::WHITE };
+        return ranges::all_of(roles, [&](auto role) { return contest.players.at(role).participant->is_local; });
+    }
+
+    void toggle_bot_hosting(Role role, Participant_ptr participant = nullptr, bool is_local_game = false)
+    {
+        Player& player { contest.players.at(role) };
+        if (player.type == PlayerType::REMOTE_HUMAN_PLAYER)
+            return;
+        if (player.type == PlayerType::BOT_PLAYER) {
+            player.type = PlayerType::LOCAL_HUMAN_PLAYER;
+        } else {
+            player.type = PlayerType::BOT_PLAYER;
+            check_bot(participant, role, is_local_game);
+        }
+    }
+
+    auto do_move(Participant_ptr participant, Position pos, Role role = Role::NONE, bool is_local_game = false)
+    {
+        logger->debug("do_move: pos = {}, role = {}, is_local_game = {}", pos.to_string(), role.map("b", "w", "-"), std::to_string(is_local_game));
+        timer_cancelled = true;
+        timer.cancel();
+
+        Player player, opponent;
+        try {
+            player = Player { contest.players.at(role, participant) };
+            opponent = Player { contest.players.at(-player.role) };
+        } catch (std::exception& e) {
+            logger->error("Ignore move: {}, playerlist: {}, cannot find player {}",
+                e.what(), contest.players.to_string(), role.map("b", "w", "-"));
+            return false;
+        }
+
+        try {
+            contest.play(player, pos);
+        } catch (Contest::StatusError& e) {
+            logger->error("Ignore move: {}, Contest status is {}", e.what(), std::to_underlying(contest.status));
+            return false;
+        } catch (std::exception& e) {
+            logger->error("Ignore move: {}, player:{}", e.what(), player.to_string());
+            return false;
+        }
+
+        if (!is_local_game)
+            check_online_contest_result();
+
+        if (contest.status == Contest::Status::ON_GOING) {
+            timer_cancelled = false;
+            timer.expires_after(contest.duration);
+            timer.async_wait([=](const asio::error_code& ec) {
+                if (!ec && !timer_cancelled) {
+                    logger->debug("timeout: role = {}", role.map("b", "w", "-"));
+                    contest.timeout(opponent);
+                    if (!is_local_game)
+                        check_online_contest_result();
+                    deliver_ui_state();
+                }
+            });
+        }
+
+        deliver_ui_state();
+
+        check_bot(opponent.participant, opponent.role, is_local_game);
+        return true;
+    }
+
+    auto should_bot_move(Participant_ptr participant, Role role = Role::NONE)
+    {
+        if (!participant->is_local || contest.status != Contest::Status::ON_GOING)
+            return false;
+
+        auto player { contest.players.at(role, participant) };
+
+        return player.type == PlayerType::BOT_PLAYER && contest.current.role == player.role;
+    }
+
+    void check_bot(Participant_ptr participant, Role role = Role::NONE, bool is_local_game = false)
+    {
+        logger->debug("check_bot: participant = {}, role = {}, is_local_game = {}", participant != nullptr ? participant->to_string() : "null", role.map("b", "w", "-"), std::to_string(is_local_game));
+
+        if (!should_bot_move(participant, role))
+            return;
+
+        auto player { contest.players.at(role, participant) };
+
+        logger->info("check_bot: start bot");
+        auto bot = [&](const State& state, Participant_ptr participant, const Role& role = Role::NONE, bool is_local_game = false) {
+            std::lock_guard<std::mutex> guard(bot_mutex);
+            logger->info("bot start calcing move, role = {}", role.map("b", "w", "-"));
+            auto pos = mcts_bot_player(state);
+            if (pos) {
+                logger->info("bot finish calcing move, role = {}, pos = {}", role.map("b", "w", "-"), pos.to_string());
+                if (should_bot_move(participant, role)) {
+                    if (do_move(participant, pos, role, is_local_game)) {
+                        deliver_to_others({ OpCode::MOVE_OP, pos.to_string() }, participant);
+                    }
+                }
+            } else {
+                logger->error("bot failed to calc move, role = {}", role.map("b", "w", "-"));
+            }
+        };
+        std::thread bot_thread { bot, std::ref(contest.current), participant, player.role, is_local_game };
+        bot_thread.detach();
     }
 
     auto receive_participant_name(Participant_ptr participant, std::string_view name)
@@ -217,9 +339,17 @@ public:
     {
         while (!received_requests.empty()) {
             auto r = received_requests.front();
-            received_requests.pop_back();
+            received_requests.pop_front();
             r->deliver({ OpCode::REJECT_OP, name });
         }
+    }
+    void reject_all_received_requests(Participant_ptr participant = nullptr)
+    {
+        std::string_view name { participant == nullptr ? "" : participant->get_name() };
+        logger->debug("reject_all_received_requests");
+
+        ranges::for_each(received_requests, [=](auto& r) { if (name != r.sender->get_name()) r.sender->deliver({ OpCode::REJECT_OP, r.receiver->get_name(), "Already accepted other request" }); });
+        received_requests.clear();
     }
 
 public:
@@ -236,6 +366,7 @@ public:
         case OpCode::READY_OP:
             participant->ready(data1, data2);
             deliver_ui_state();
+            check_bot(participant, Role::BLACK, true);
             break;
         case OpCode::REJECT_OP:
             participant->reject(data1, data2);
@@ -303,8 +434,8 @@ public:
             participant->chat_username_update(data1, data2);
             break;
         // -------- Contest Request --------
-        case OpCode::UPDATE_USERNAME_OP:
-            participant->update_username(data1, data2);
+        case OpCode::SYNC_ONLINE_SETTINGS_OP:
+            participant->sync_online_settings(data1, data2);
             break;
         case OpCode::SEND_REQUEST_BY_IP_OP:
             participant->send_request_by_ip(data1, data2);
@@ -324,6 +455,22 @@ public:
             break;
         case OpCode::RECEIVE_REQUEST_RESULT_OP:
             participant->receive_request_result(data1, data2);
+            break;
+        case OpCode::REPLAY_START_MOVE_OP:
+            participant->replay_start_move(data1, data2);
+            deliver_ui_state();
+            break;
+        case OpCode::REPLAY_MOVE_OP:
+            participant->replay_move(data1, data2);
+            deliver_ui_state();
+            break;
+        case OpCode::REPLAY_STOP_MOVE_OP:
+            participant->replay_stop_move(data1, data2);
+            deliver_ui_state();
+            break;
+        case OpCode::BOT_HOSTING_OP:
+            participant->bot_hosting(data1, data2);
+            deliver_ui_state();
             break;
         }
     }
@@ -347,6 +494,7 @@ public:
 
         auto is_first { !received_requests.empty() && received_requests.front() == participant };
         std::erase(received_requests, participant);
+
         if (is_first && !received_requests.empty()) {
             logger->debug("leave: is_first && !received_requests.empty(), send received_requests.front() to local");
             deliver_to_local({ OpCode::RECEIVE_REQUEST_OP, received_requests.front()->name, received_requests.front()->player.role.map("b", "w", "") });
@@ -401,57 +549,10 @@ public:
 
 void Participant::move(string_view data1, string_view data2)
 {
-    auto& contest { room.contest };
-    auto& timer { room.timer };
-    auto& timer_cancelled { room.timer_cancelled };
-    timer_cancelled = true;
-    timer.cancel();
-    std::cout << "timer canceled" << std::endl;
-
     Position pos { data1 };
-    try {
-        milliseconds ms { stoull(data2) };
-    } catch (std::exception& e) {
-        // TODO:
-    }
 
-    // TODO: adjust time
-
-    Player player { this->player }, opponent;
-    try {
-        opponent = contest.players.at(-player.role);
-    } catch (std::exception& e) {
-        logger->error("Ignore move: {}, playerlist: {}, try to find participant {}",
-            e.what(), contest.players.to_string(), ::to_string(*this));
-        return;
-    }
-
-    try {
-        contest.play(player, pos);
-    } catch (Contest::StatusError& e) {
-        logger->error("Ignore move: {}, Contest status is {}", e.what(), std::to_underlying(contest.status));
-        return;
-    } catch (std::exception& e) {
-        logger->error("Ignore move: {}, player:{}", e.what(), ::to_string(player));
-        return;
-    }
-
-    room.deliver_to_others({ OpCode::MOVE_OP, data1, data2 }, shared_from_this()); // broadcast
-    if (contest.status == Contest::Status::GAME_OVER)
-        process_game_over();
-
-    if (contest.status == Contest::Status::ON_GOING) {
-        contest.duration = TIMEOUT;
-        timer_cancelled = false;
-        timer.expires_after(contest.duration);
-        timer.async_wait([&](const asio::error_code& ec) {
-            if (!ec && !timer_cancelled) {
-                contest.timeout(opponent);
-                if (contest.status == Contest::Status::GAME_OVER)
-                    this->process_game_over();
-                room.deliver_ui_state();
-            }
-        });
+    if (room.do_move(shared_from_this(), pos)) {
+        room.deliver_to_others({ OpCode::MOVE_OP, data1, data2 }, shared_from_this()); // broadcast
     }
 }
 
@@ -581,9 +682,13 @@ public:
             contest = Contest { PlayerList { this->player, my_request->player } };
             contest.local_role = my_request->is_local ? my_request->player.role : -my_request->player.role;
             // TODO: catch exceptions when enrolling playersmy_request
-            my_request = nullptr;
+            my_rqeuest = nullptr;
             room.reject_all_received_requests(this->name);
         } else {
+            if (contest.status == Contest::Status::ON_GOING) {
+                deliver({ OpCode::REJECT_OP, room.find_local_participant()->name, "Contest already started" });
+                return;
+            }
             this->player = Player { shared_from_this(), name, role, PlayerType::REMOTE_HUMAN_PLAYER };
             if (received_requests.empty()) {
                 room.deliver_to_local({ OpCode::RECEIVE_REQUEST_OP, this->name, this->player.role.map("b", "w", "") });
@@ -595,31 +700,28 @@ public:
     {
         auto& contest { room.contest };
         auto& my_request { room.my_request };
-        contest.reject();
 
         auto name { room.receive_participant_name(shared_from_this(), data1) };
         if (my_request == shared_from_this()) {
             room.deliver_to_local({ OpCode::RECEIVE_REQUEST_RESULT_OP, "rejected", name });
             my_request = nullptr;
+            contest.reject();
         }
     }
     // move
     void giveup(string_view data1, string_view data2) override
     {
-        // ignore data1(username)
+        // data1: role(local) / username(online)
         // TODO: data2(greeting)
         auto& contest { room.contest };
-        Role role { data1 };
-        auto player { this->player };
+        Player player { this->player }, opponent;
         try {
-            auto opponent { contest.players.at(-player.role) };
+            opponent = contest.players.at(-player.role);
         } catch (std::exception& e) {
             logger->error("Ignore give up: {}, playerlist: {}, try to find participant {}",
-                e.what(), contest.players.to_string(), ::to_string(shared_from_this()));
+                e.what(), contest.players.to_string(), ::to_string(*this));
             return;
         }
-
-        room.deliver_to_others({ OpCode::GIVEUP_OP, data1, data2 }, shared_from_this()); // broadcast
 
         try {
             contest.concede(player);
@@ -729,9 +831,9 @@ public:
         throw std::logic_error { "Participant should not send chat_username_update" };
     }
 
-    void update_username(string_view, string_view) override
+    void sync_online_settings(string_view, string_view) override
     {
-        throw std::logic_error { "Participant should not update_username" };
+        throw std::logic_error { "Participant should not sync_online_settings" };
     }
     void send_request_by_ip(string_view, string_view) override
     {
@@ -786,11 +888,17 @@ public:
     // move
     void giveup(string_view data1, string_view data2)
     {
-        auto& contest { room.contest };
-        // ignore data1(username)
+        // data1: role(local) / username(online)
         // TODO: data2(greeting)
-        Player player { this->player }, opponent;
+        auto& contest { room.contest };
+        Player player, opponent;
         try {
+            if (room.is_local_contest()) {
+                Role role { data1 };
+                player = local_players.at(role);
+            } else {
+                player = this->player;
+            }
             opponent = contest.players.at(-player.role);
         } catch (std::exception& e) {
             logger->error("Ignore give up: {}, playerlist: {}, try to find participant {}",
@@ -798,9 +906,7 @@ public:
             return;
         }
 
-        if (is_local) {
-            room.deliver_to_others({ OpCode::GIVEUP_OP, data1, data2 }, shared_from_this()); // broadcast
-        }
+        room.deliver_to_others({ OpCode::GIVEUP_OP, data1, data2 }, shared_from_this()); // broadcast
 
         try {
             contest.concede(player);
@@ -839,30 +945,37 @@ public:
 
     void start_local_game(string_view data1, string_view data2) override
     {
+        // data1 = timeout|type, data2 = size
         auto& contest { room.contest };
-        std::cout << "start local game: timeout = " << data1 << ", size = " << data2 << std::endl;
+        auto tmp = data1 | ranges::views::split("|"sv) | ranges::to<std::vector<std::string>>();
+        if (tmp.size() != 2) {
+            throw std::logic_error("invalid data1");
+        }
+        logger->info("start local game: timeout = {}, type = {}, size = {}", tmp[0], tmp[1], data2);
         if (contest.status != Contest::Status::NOT_PREPARED) {
             contest = Contest {};
         }
-        // int timeout = std::stoi(msg.data1);
-        // int rank_n = std::stoi(msg.data2);
+        int timeout = stoi(tmp[0]);
+        int type = stoi(tmp[1]);
+        int size = stoi(data2);
 
-        seconds duration { stoi(data1) };
+        seconds duration { timeout };
         contest.duration = duration;
+        contest.set_board_size(size);
 
-        Player player1 { shared_from_this(), "BLACK", Role::BLACK, PlayerType::LOCAL_HUMAN_PLAYER },
-            player2 { shared_from_this(), "WHITE", Role::WHITE, PlayerType::LOCAL_HUMAN_PLAYER };
+        Player player1 { participant, "Black", Role::BLACK, (type == 2 || type == 3 ? PlayerType::BOT_PLAYER : PlayerType::LOCAL_HUMAN_PLAYER) },
+            player2 { participant, "White", Role::WHITE, (type == 1 || type == 3 ? PlayerType::BOT_PLAYER : PlayerType::LOCAL_HUMAN_PLAYER) };
         local_players = { player1, player2 };
         try {
             contest = Contest { local_players };
         } catch (Contest::StatusError& e) {
             logger->error("Ignore enroll player: {}, Contest status is {}", e.what(), std::to_underlying(contest.status));
-            return;
+            break;
         } catch (std::exception& e) {
             logger->error("Ignore enroll Player: {}, player1: {}, player2: {}. playerlist: {}.",
-                e.what(), ::to_string(player1), ::to_string(player2), contest.players.to_string());
+                e.what(), player1.to_string(), player2.to_string(), contest.players.to_string());
             contest.players = {};
-            return;
+            break;
         }
         contest.local_role = Role::BLACK;
     }
@@ -872,38 +985,8 @@ public:
     {
         Position pos { data1 };
         Role role { data2 };
-        auto& contest { room.contest };
-        timer.cancel();
 
-        Player player { this->player }, opponent;
-        try {
-            opponent = contest.players.at(-player.role);
-        } catch (std::exception& e) {
-            logger->error("Ignore move: {}, playerlist: {}, try to find role {}, participant {}",
-                e.what(), contest.players.to_string(), role.to_string(), ::to_string(shared_from_this()));
-            return;
-        }
-
-        try {
-            contest.play(player, pos);
-        } catch (Contest::StatusError& e) {
-            logger->error("Ignore move: {}, Contest status is {}", e.what(), std::to_underlying(contest.status));
-            return;
-        } catch (std::exception& e) {
-            logger->error("Ignore move: {}, player:{}", e.what(), ::to_string(player));
-            return;
-        }
-
-        if (contest.status == Contest::Status::ON_GOING) {
-            timer.expires_after(contest.duration);
-            timer.async_wait([&](const asio::error_code& ec) {
-                if (!ec) {
-                    contest.timeout(opponent);
-                    opponent.participant->deliver({ OpCode::TIMEOUT_END_OP });
-                    room.deliver_ui_state();
-                }
-            });
-        }
+        room.do_move(shared_from_this(), pos, role, true);
     }
     void connect_to_remote(string_view data1, string_view data2) override
     {
@@ -942,9 +1025,12 @@ public:
     {
     }
 
-    void update_username(string_view data1, string_view)
+    void sync_online_settings(string_view data1, string_view data2)
     {
         room.receive_participant_name(shared_from_this(), data1);
+        std::chrono::seconds duration { stoi(data2) };
+        TIMEOUT = duration;
+        break;
     }
     void send_request(string_view role_str, auto&& predicate)
     {
@@ -984,7 +1070,7 @@ public:
         if (received_requests.empty())
             throw std::logic_error { "received_requests.empty()" };
         auto participant { received_requests.front() };
-        received_requests.pop_back();
+        received_requests.pop_front();
         room.reject_all_received_requests(this->name);
 
         this->player = Player { shared_from_this(), this->name, -participant->player.role, PlayerType::LOCAL_HUMAN_PLAYER };
@@ -1002,7 +1088,7 @@ public:
         if (received_requests.empty())
             throw std::runtime_error { "received_requests.empty()" };
         auto participant { received_requests.front() };
-        received_requests.pop_back();
+        received_requests.pop_front();
         participant->deliver({ OpCode::REJECT_OP, this->name });
         if (!received_requests.empty()) {
             auto next_participant { received_requests.front() };
@@ -1010,6 +1096,58 @@ public:
         }
     }
     // receive_request_result
+
+    void replay_start_move(string_view data1, string_view data2)
+    {
+        auto& contest { this->room.contest };
+        // data1: current moves
+        // data2: board size
+        if (contest.status == Contest::Status::ON_GOING) {
+            throw std::logic_error("contest already started");
+        }
+        auto size { stoi(data2) };
+        contest.clear();
+        contest.set_board_size(size);
+        Player player1 { participant, "BLACK", Role::BLACK, PlayerType::LOCAL_HUMAN_PLAYER },
+            player2 { participant, "WHITE", Role::WHITE, PlayerType::LOCAL_HUMAN_PLAYER };
+        contest.enroll(std::move(player1)), contest.enroll(std::move(player2));
+        contest.local_role = Role::BLACK;
+        contest.is_replaying = true;
+
+        auto tmp {
+            data1 | ranges::views::split(" "sv)
+            | ranges::to<std::vector<std::string>>()
+        };
+
+        auto moves {
+            tmp | ranges::views::transform([](auto&& s) { return Position { s }; })
+            | ranges::to<std::vector<Position>>()
+        };
+
+        ranges::for_each(moves, [&](auto&& pos) {
+            Role role { contest.moves.size() % 2 == 0 ? Role::BLACK : Role::WHITE };
+            auto player { contest.players.at(role) };
+            contest.play(player, pos);
+        });
+    }
+    void replay_move(string_view data1, string_view) override
+    {
+        auto& contest { room.contest };
+        Position pos { data1 };
+        Role role { contest.moves.size() % 2 == 0 ? Role::BLACK : Role::WHITE };
+        auto player { contest.players.at(role) };
+        contest.play(player, pos);
+    }
+    void replay_stop_move(string_view, string_view) override
+    {
+        room.contest.clear();
+    }
+
+    void bot_hosting(string_view data1, string_view) override
+    {
+        Role role { data1 };
+        room.toggle_bot_hosting(role, shared_from_this(), room.is_local_contest());
+    }
 };
 
 void start_session(asio::io_context& io_context, Room& room, asio::error_code& ec, tcp::endpoint endpoint)
