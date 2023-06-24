@@ -45,10 +45,13 @@ _EXPORT struct Player {
     {
         return !name.empty() && std::ranges::all_of(name, [](auto c) { return std::isalnum(c) || c == '_'; });
     }
+    auto to_string() const -> std::string
+    {
+        return fmt::format("[Player name: {}, role: {}, type: {}]", name, role.to_string(), std::to_underlying(type));
+    }
     friend std::ostream& operator<<(std::ostream& os, const Player& player)
     {
-        return os << fmt::format("",
-                   to_string(*player.participant), player.name, player.role.to_string(), std::to_underlying(player.type));
+        return os << player.to_string();
     }
 };
 
@@ -56,7 +59,7 @@ template <>
 struct fmt::formatter<Player> : fmt::formatter<std::string> {
     auto format(const Player& player, format_context& ctx)
     {
-        return format_to(ctx.out(), "[Player name: {}, role: {}, type: {}]", player.name, player.role, player.type);
+        return fmt::format_to(ctx.out(), "[Player name: {}, role: {}, type: {}]", player.name, player.role, std::to_underlying(player.type));
     }
 };
 
@@ -178,9 +181,10 @@ public:
     bool is_replaying {};
 
     Contest() = default;
-    Contest(PlayerList players)
+    Contest(PlayerList players, int board_size = 9)
         : players(std::move(players))
     {
+        _set_board_size(board_size);
         status = Status::ON_GOING;
         start_time = std::chrono::system_clock::now();
     }

@@ -81,7 +81,7 @@ template <>
 struct fmt::formatter<Role> : fmt::formatter<std::string> {
     auto format(Role role, format_context& ctx)
     {
-        return format_to(ctx.out(), "[{}]", role.map("b", "w", "-"));
+        return fmt::format_to(ctx.out(), "[{}]", role.map("b", "w", "-"));
     }
 };
 
