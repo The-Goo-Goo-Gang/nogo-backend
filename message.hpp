@@ -20,32 +20,32 @@ _EXPORT enum class OpCode : int {
     LEAVE_OP,
     CHAT_OP,
     // -------- Extend OpCode --------
-    START_LOCAL_GAME_OP = 100000,
-    UPDATE_UI_STATE_OP,
-    LOCAL_GAME_TIMEOUT_OP [[deprecated]],
-    LOCAL_GAME_MOVE_OP,
-    CONNECT_TO_REMOTE_OP,
-    CONNECT_RESULT_OP,
-    WIN_PENDING_OP,
+    START_LOCAL_GAME_OP = 100000, // 开始一局本地游戏
+    UPDATE_UI_STATE_OP, // 更新 UI 状态
+    LOCAL_GAME_TIMEOUT_OP [[deprecated]], // Deprecated
+    LOCAL_GAME_MOVE_OP, // 本地游戏落子（data1 = Position, data2 = Role）
+    CONNECT_TO_REMOTE_OP, // 连接到远程服务器
+    CONNECT_RESULT_OP, // 返回连接结果
+    WIN_PENDING_OP, // 即将胜利
     // -------- Chat --------
-    CHAT_SEND_MESSAGE_OP,
-    CHAT_SEND_BROADCAST_MESSAGE_OP,
-    CHAT_RECEIVE_MESSAGE_OP,
-    CHAT_USERNAME_UPDATE_OP,
+    CHAT_SEND_MESSAGE_OP, // 向某人发送消息
+    CHAT_SEND_BROADCAST_MESSAGE_OP, // 广播一条消息
+    CHAT_RECEIVE_MESSAGE_OP, // 收到消息
+    CHAT_USERNAME_UPDATE_OP, // 用户昵称更新
     // -------- Contest Request --------
-    SYNC_ONLINE_SETTINGS_OP,
-    SEND_REQUEST_BY_IP_OP,
-    SEND_REQUEST_BY_USERNAME_OP,
-    RECEIVE_REQUEST_OP,
-    ACCEPT_REQUEST_OP,
-    REJECT_REQUEST_OP,
-    RECEIVE_REQUEST_RESULT_OP,
+    SYNC_ONLINE_SETTINGS_OP, // 同步多人游戏设置（data1 = 用户名, data2 = 限时）
+    SEND_REQUEST_BY_IP_OP, // 发送对局申请（data1 = Host:Port, data2 = Role）
+    SEND_REQUEST_BY_USERNAME_OP, // 发送对局申请（data1 = 用户名, data2 = Role）
+    RECEIVE_REQUEST_OP, // 收到新的申请
+    ACCEPT_REQUEST_OP, // 接受队列中的第一个申请
+    REJECT_REQUEST_OP, // 拒绝队列中的第一个申请
+    RECEIVE_REQUEST_RESULT_OP, // 发送的申请收到结果
     // -------- Game Replay --------
-    REPLAY_START_MOVE_OP,
-    REPLAY_MOVE_OP,
-    REPLAY_STOP_MOVE_OP,
+    REPLAY_START_MOVE_OP, // 对局回放 开始介入
+    REPLAY_MOVE_OP, // 对局回放介入 落子
+    REPLAY_STOP_MOVE_OP, // 对局回放退出介入
     // -------- Bot --------
-    BOT_HOSTING_OP,
+    BOT_HOSTING_OP, // 切换 AI 托管状态
     // -------- Extend OpCode End --------
 };
 
