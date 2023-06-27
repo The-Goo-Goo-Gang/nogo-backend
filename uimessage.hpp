@@ -1,11 +1,7 @@
 #pragma once
-#ifndef _EXPORT
-#define _EXPORT
-#endif
 
 #include <algorithm>
 #include <array>
-#include <ctime>
 #include <chrono>
 #include <nlohmann/json.hpp>
 #include <optional>
@@ -16,12 +12,7 @@
 #include "contest.hpp"
 #include "message.hpp"
 #include "rule.hpp"
-
-#ifdef __GNUC__
-#include <range/v3/all.hpp>
-#else
-namespace ranges = std::ranges;
-#endif
+#include "utility.hpp"
 
 using nlohmann::json;
 using std::string;
@@ -58,7 +49,7 @@ _EXPORT struct UiMessage : public Message {
         PlayerData() = default;
         PlayerData(const Player& player)
             : name(player.name)
-            , type(PlayerType::LOCAL_HUMAN_PLAYER)
+            , type(player.type)
             , chess_type(player.role.id)
         {
         }
@@ -70,7 +61,7 @@ _EXPORT struct UiMessage : public Message {
         int turn_timeout;
         GameMetadata() = default;
         GameMetadata(const Contest& contest)
-            : size(rank_n)
+            : size(contest.board_size)
             , player_opposing(PlayerData(contest.players.at(-contest.local_role)))
             , player_our(PlayerData(contest.players.at(contest.local_role)))
             , turn_timeout(contest.duration.count())
@@ -90,15 +81,18 @@ _EXPORT struct UiMessage : public Message {
         NLOHMANN_DEFINE_TYPE_INTRUSIVE(GameResult, winner, win_type)
     };
     struct Game {
-        std::array<std::array<int, rank_n>, rank_n> chessboard;
+        std::vector<std::vector<int>> chessboard;
         int now_playing;
         int move_count;
+        bool should_giveup;
         long long start_time;
         long long end_time;
         std::optional<Position> last_move;
         std::vector<Position> disabled_positions;
         GameMetadata metadata;
         std::vector<DynamicStatistics> statistics;
+        std::string encoded;
+        bool is_replaying;
         Game() = default;
         Game(const Contest& contest)
             : now_playing(contest.current.role.id)
@@ -107,19 +101,27 @@ _EXPORT struct UiMessage : public Message {
             , last_move(contest.moves.empty() ? std::nullopt : std::optional<Position>(contest.moves.back()))
             , start_time { std::chrono::duration_cast<std::chrono::milliseconds>(contest.start_time.time_since_epoch()).count() }
             , end_time { contest.status == Contest::Status::GAME_OVER ? std::chrono::duration_cast<std::chrono::milliseconds>(contest.end_time.time_since_epoch()).count() : 0 }
+            , encoded { contest.encode() }
+            , is_replaying(contest.is_replaying)
+            , should_giveup(contest.should_giveup)
         {
+            auto rank = contest.current.board->get_rank();
             auto actions = contest.current.available_actions();
-            auto index = Board::index();
+            auto index = contest.current.board->index();
             disabled_positions = index
-                | ranges::views::filter([&](auto pos) { return !contest.current.board[pos] && std::find(actions.begin(), actions.end(), pos) == actions.end(); })
+                | ranges::views::filter([&](auto pos) { return !(*contest.current.board)[pos] && std::find(actions.begin(), actions.end(), pos) == actions.end(); })
                 | ranges::to<std::vector>();
-            const auto board = contest.current.board.to_2darray();
-            for (int i = 0; i < rank_n; ++i)
-                for (int j = 0; j < rank_n; ++j)
+            const auto board = contest.current.board->to_2dvector();
+            chessboard.resize(rank);
+            for (int i = 0; i < rank; ++i) {
+                chessboard[i].resize(rank);
+                for (int j = 0; j < rank; ++j) {
                     chessboard[i][j] = board[i][j].id;
+                }
+            }
         }
 
-        NLOHMANN_DEFINE_TYPE_INTRUSIVE(Game, chessboard, now_playing, move_count, metadata, statistics, disabled_positions, last_move, start_time, end_time)
+        NLOHMANN_DEFINE_TYPE_INTRUSIVE(Game, should_giveup, is_replaying, chessboard, now_playing, move_count, metadata, statistics, disabled_positions, last_move, start_time, end_time, encoded)
     };
     struct UiState {
         bool is_gaming;

@@ -42,8 +42,8 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v3
         with:
-          name: xmake-artifact
-          path: build\mingw\x86_64\release\*.exe
+          name: windows-mingw-artifact
+          path: build\mingw\x86_64\release\*server*.exe
       - name: Test
         run: xmake run test
   windows-msvc:
@@ -59,9 +59,9 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v3
         with:
-          name: xmake-artifact
+          name: windows-msvc-artifact
           path: |
-            build\windows\x64\release\*.exe
+            build\windows\x64\release\*server*.exe
       - name: Test
         run: xmake run test
   ubuntu-gcc:
@@ -73,12 +73,14 @@ jobs:
         with:
           xmake-version: latest
       - name: Build
-        run: xmake -y
+        run: |
+          xmake f --toolchain=gcc-12 -c --ldflags="-static" -y
+          xmake -y
       - name: Upload artifact
         uses: actions/upload-artifact@v3
         with:
-          name: xmake-artifact
+          name: ubuntu-gcc-artifact
           path: |
-            build/linux/x86_64/release/*
+            build/linux/x86_64/release/*server*
       - name: Test
         run: xmake run test

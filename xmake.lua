@@ -1,6 +1,6 @@
 add_rules("mode.debug", "mode.release")
 
-add_requires("asio", "nlohmann_json","spdlog","gtest")
+add_requires("asio", "nlohmann_json","spdlog","gtest", "magic_enum")
 add_requires("range-v3", "fmt")
 set_languages("cxxlatest")
 -- set_optimize("aggressive")
@@ -9,7 +9,7 @@ set_optimize("fastest")
 
 target("nogo")
     set_kind("binary")
-    add_packages("asio", "nlohmann_json","spdlog")
+    add_packages("asio", "nlohmann_json","spdlog", "magic_enum", "fmt")
     add_packages("range-v3")
     add_files("nogo.cpp")
     if is_plat("windows") or is_plat("mingw") then
