@@ -3,6 +3,9 @@
 #include <iostream>
 #include <optional>
 
+#include <magic_enum.hpp>
+#include <magic_enum_format.hpp>
+
 #include "spdlog/async.h"
 #include "spdlog/sinks/ansicolor_sink.h"
 #include "spdlog/sinks/basic_file_sink.h"

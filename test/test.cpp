@@ -1,7 +1,9 @@
 #include <algorithm>
 #include <deque>
 #include <iostream>
+#include <ranges>
 #include <sstream>
+#include <string>
 #include <string_view>
 #include <thread>
 #include <vector>
@@ -10,6 +12,7 @@ using std::string;
 using std::string_view;
 using std::vector;
 using namespace std::literals::chrono_literals;
+using namespace std::literals::string_view_literals;
 
 #include <asio.hpp>
 #include <asio/co_spawn.hpp>
@@ -114,6 +117,32 @@ auto launch_client(asio::io_context& io_context, string_view ip, string_view por
     return std::make_shared<Session>(std::move(socket));
 }
 
+struct MessageFormat {
+    string_view format;
+    static constexpr auto placeholder { "{TIMESTAMP}"sv };
+    static constexpr auto timestamp_len { 13 };
+    constexpr MessageFormat(const char* format)
+        : format { format }
+    {
+    }
+    auto operator==(std::string message) const
+    {
+        if (!format.contains(placeholder)) {
+            return message == format;
+        }
+        auto message_it { message.begin() };
+        return std::ranges::all_of(std::ranges::views::split(format, placeholder), [&](auto format_part) {
+            bool match = std::equal(format_part.begin(), format_part.end(), message_it);
+            message_it += format_part.size() + (format_part.end() != format.end()) * timestamp_len;
+            return match;
+        }) && message_it == message.end();
+    }
+    operator const char*() const
+    {
+        return format.data();
+    }
+};
+
 const vector<vector<string>> send_msgs1 {
     { R"({"op":100011,"data1":"Player1","data2":"30"})" },
     { R"({"op":100015,"data1":"","data2":""})" },
@@ -135,23 +164,23 @@ const vector<vector<string>> send_msgs2 {
     { R"({"op":200007,"data1":"","data2":""})" }
 };
 
-const vector<vector<string>> recv_msgs1 {
+const vector<vector<MessageFormat>> recv_msgs1 {
     {},
     { R"({"data1":"Player2","data2":"w","op":100014})",
-        R"({"data1":"{TIMEOUT}","data2":"{\"game\":null,\"game_result\":{\"win_type\":0,\"winner\":0},\"is_gaming\":false,\"status\":0}","op":100001})" },
-    { R"({"data1":"{TIMEOUT}","data2":"{\"game\":{\"chessboard\":[[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0]],\"disabled_positions\":[],\"encoded\":\"\",\"end_time\":0,\"is_replaying\":false,\"last_move\":null,\"metadata\":{\"player_opposing\":{\"avatar\":\"\",\"chess_type\":-1,\"name\":\"Player2\",\"type\":1},\"player_our\":{\"avatar\":\"\",\"chess_type\":1,\"name\":\"Player1\",\"type\":0},\"size\":9,\"turn_timeout\":30},\"move_count\":0,\"now_playing\":1,\"should_giveup\":false,\"start_time\":{TIMEOUT},\"statistics\":[]},\"game_result\":{\"win_type\":0,\"winner\":0},\"is_gaming\":true,\"status\":1}","op":100001})" },
+        R"({"data1":"{TIMESTAMP}","data2":"{\"game\":null,\"game_result\":{\"win_type\":0,\"winner\":0},\"is_gaming\":false,\"status\":0}","op":100001})" },
+    { R"({"data1":"{TIMESTAMP}","data2":"{\"game\":{\"chessboard\":[[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0]],\"disabled_positions\":[],\"encoded\":\"\",\"end_time\":0,\"is_replaying\":false,\"last_move\":null,\"metadata\":{\"player_opposing\":{\"avatar\":\"\",\"chess_type\":-1,\"name\":\"Player2\",\"type\":1},\"player_our\":{\"avatar\":\"\",\"chess_type\":1,\"name\":\"Player1\",\"type\":0},\"size\":9,\"turn_timeout\":30},\"move_count\":0,\"now_playing\":1,\"should_giveup\":false,\"start_time\":{TIMESTAMP},\"statistics\":[]},\"game_result\":{\"win_type\":0,\"winner\":0},\"is_gaming\":true,\"status\":1}","op":100001})" },
     {},
 
-    { R"({"data1":"{TIMEOUT}","data2":"{\"game\":{\"chessboard\":[[1,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0]],\"disabled_positions\":[],\"encoded\":\"A1\",\"end_time\":0,\"is_replaying\":false,\"last_move\":{\"x\":0,\"y\":0},\"metadata\":{\"player_opposing\":{\"avatar\":\"\",\"chess_type\":-1,\"name\":\"Player2\",\"type\":1},\"player_our\":{\"avatar\":\"\",\"chess_type\":1,\"name\":\"Player1\",\"type\":0},\"size\":9,\"turn_timeout\":30},\"move_count\":1,\"now_playing\":-1,\"should_giveup\":false,\"start_time\":{TIMEOUT},\"statistics\":[]},\"game_result\":{\"win_type\":0,\"winner\":0},\"is_gaming\":true,\"status\":1}","op":100001})" },
-    { R"({"data1":"{TIMEOUT}","data2":"{\"game\":{\"chessboard\":[[1,-1,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0]],\"disabled_positions\":[],\"encoded\":\"A1 A2\",\"end_time\":0,\"is_replaying\":false,\"last_move\":{\"x\":0,\"y\":1},\"metadata\":{\"player_opposing\":{\"avatar\":\"\",\"chess_type\":-1,\"name\":\"Player2\",\"type\":1},\"player_our\":{\"avatar\":\"\",\"chess_type\":1,\"name\":\"Player1\",\"type\":0},\"size\":9,\"turn_timeout\":30},\"move_count\":2,\"now_playing\":1,\"should_giveup\":false,\"start_time\":{TIMEOUT},\"statistics\":[]},\"game_result\":{\"win_type\":0,\"winner\":0},\"is_gaming\":true,\"status\":1}","op":100001})",
+    { R"({"data1":"{TIMESTAMP}","data2":"{\"game\":{\"chessboard\":[[1,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0]],\"disabled_positions\":[],\"encoded\":\"A1\",\"end_time\":0,\"is_replaying\":false,\"last_move\":{\"x\":0,\"y\":0},\"metadata\":{\"player_opposing\":{\"avatar\":\"\",\"chess_type\":-1,\"name\":\"Player2\",\"type\":1},\"player_our\":{\"avatar\":\"\",\"chess_type\":1,\"name\":\"Player1\",\"type\":0},\"size\":9,\"turn_timeout\":30},\"move_count\":1,\"now_playing\":-1,\"should_giveup\":false,\"start_time\":{TIMESTAMP},\"statistics\":[]},\"game_result\":{\"win_type\":0,\"winner\":0},\"is_gaming\":true,\"status\":1}","op":100001})" },
+    { R"({"data1":"{TIMESTAMP}","data2":"{\"game\":{\"chessboard\":[[1,-1,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0]],\"disabled_positions\":[],\"encoded\":\"A1 A2\",\"end_time\":0,\"is_replaying\":false,\"last_move\":{\"x\":0,\"y\":1},\"metadata\":{\"player_opposing\":{\"avatar\":\"\",\"chess_type\":-1,\"name\":\"Player2\",\"type\":1},\"player_our\":{\"avatar\":\"\",\"chess_type\":1,\"name\":\"Player1\",\"type\":0},\"size\":9,\"turn_timeout\":30},\"move_count\":2,\"now_playing\":1,\"should_giveup\":false,\"start_time\":{TIMESTAMP},\"statistics\":[]},\"game_result\":{\"win_type\":0,\"winner\":0},\"is_gaming\":true,\"status\":1}","op":100001})",
         R"({"data1":"A2","data2":"1683446066123","op":200002})" },
-    { R"({"data1":"{TIMEOUT}","data2":"{\"game\":{\"chessboard\":[[1,-1,0,0,0,0,0,0,0],[0,1,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0]],\"disabled_positions\":[{\"x\":1,\"y\":0}],\"encoded\":\"A1 A2 B2\",\"end_time\":0,\"is_replaying\":false,\"last_move\":{\"x\":1,\"y\":1},\"metadata\":{\"player_opposing\":{\"avatar\":\"\",\"chess_type\":-1,\"name\":\"Player2\",\"type\":1},\"player_our\":{\"avatar\":\"\",\"chess_type\":1,\"name\":\"Player1\",\"type\":0},\"size\":9,\"turn_timeout\":30},\"move_count\":3,\"now_playing\":-1,\"should_giveup\":false,\"start_time\":{TIMEOUT},\"statistics\":[]},\"game_result\":{\"win_type\":0,\"winner\":0},\"is_gaming\":true,\"status\":1}","op":100001})" },
+    { R"({"data1":"{TIMESTAMP}","data2":"{\"game\":{\"chessboard\":[[1,-1,0,0,0,0,0,0,0],[0,1,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0]],\"disabled_positions\":[{\"x\":1,\"y\":0}],\"encoded\":\"A1 A2 B2\",\"end_time\":0,\"is_replaying\":false,\"last_move\":{\"x\":1,\"y\":1},\"metadata\":{\"player_opposing\":{\"avatar\":\"\",\"chess_type\":-1,\"name\":\"Player2\",\"type\":1},\"player_our\":{\"avatar\":\"\",\"chess_type\":1,\"name\":\"Player1\",\"type\":0},\"size\":9,\"turn_timeout\":30},\"move_count\":3,\"now_playing\":-1,\"should_giveup\":false,\"start_time\":{TIMESTAMP},\"statistics\":[]},\"game_result\":{\"win_type\":0,\"winner\":0},\"is_gaming\":true,\"status\":1}","op":100001})" },
     { R"({"data1":"2","data2":"","op":100006})",
-        R"({"data1":"{TIMEOUT}","data2":"{\"game\":{\"chessboard\":[[1,-1,0,0,0,0,0,0,0],[-1,1,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0]],\"disabled_positions\":[{\"x\":0,\"y\":2},{\"x\":2,\"y\":0}],\"encoded\":\"A1 A2 B2 B1\",\"end_time\":{TIMEOUT},\"is_replaying\":false,\"last_move\":{\"x\":1,\"y\":0},\"metadata\":{\"player_opposing\":{\"avatar\":\"\",\"chess_type\":-1,\"name\":\"Player2\",\"type\":1},\"player_our\":{\"avatar\":\"\",\"chess_type\":1,\"name\":\"Player1\",\"type\":0},\"size\":9,\"turn_timeout\":30},\"move_count\":4,\"now_playing\":1,\"should_giveup\":false,\"start_time\":{TIMEOUT},\"statistics\":[]},\"game_result\":{\"win_type\":2,\"winner\":1},\"is_gaming\":false,\"status\":2}","op":100001})",
+        R"({"data1":"{TIMESTAMP}","data2":"{\"game\":{\"chessboard\":[[1,-1,0,0,0,0,0,0,0],[-1,1,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0]],\"disabled_positions\":[{\"x\":0,\"y\":2},{\"x\":2,\"y\":0}],\"encoded\":\"A1 A2 B2 B1\",\"end_time\":{TIMESTAMP},\"is_replaying\":false,\"last_move\":{\"x\":1,\"y\":0},\"metadata\":{\"player_opposing\":{\"avatar\":\"\",\"chess_type\":-1,\"name\":\"Player2\",\"type\":1},\"player_our\":{\"avatar\":\"\",\"chess_type\":1,\"name\":\"Player1\",\"type\":0},\"size\":9,\"turn_timeout\":30},\"move_count\":4,\"now_playing\":1,\"should_giveup\":false,\"start_time\":{TIMESTAMP},\"statistics\":[]},\"game_result\":{\"win_type\":2,\"winner\":1},\"is_gaming\":false,\"status\":2}","op":100001})",
         R"({"data1":"B1","data2":"1683446068123","op":200002})" },
 
     {},
-    { R"({"data1":"{TIMEOUT}","data2":"{\"game\":{\"chessboard\":[[1,-1,0,0,0,0,0,0,0],[-1,1,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0]],\"disabled_positions\":[{\"x\":0,\"y\":2},{\"x\":2,\"y\":0}],\"encoded\":\"A1 A2 B2 B1\",\"end_time\":{TIMEOUT},\"is_replaying\":false,\"last_move\":{\"x\":1,\"y\":0},\"metadata\":{\"player_opposing\":{\"avatar\":\"\",\"chess_type\":-1,\"name\":\"Player2\",\"type\":1},\"player_our\":{\"avatar\":\"\",\"chess_type\":1,\"name\":\"Player1\",\"type\":0},\"size\":9,\"turn_timeout\":30},\"move_count\":4,\"now_playing\":1,\"should_giveup\":false,\"start_time\":{TIMEOUT},\"statistics\":[]},\"game_result\":{\"win_type\":2,\"winner\":1},\"is_gaming\":false,\"status\":2}","op":100001})" },
+    { R"({"data1":"{TIMESTAMP}","data2":"{\"game\":{\"chessboard\":[[1,-1,0,0,0,0,0,0,0],[-1,1,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0]],\"disabled_positions\":[{\"x\":0,\"y\":2},{\"x\":2,\"y\":0}],\"encoded\":\"A1 A2 B2 B1\",\"end_time\":{TIMESTAMP},\"is_replaying\":false,\"last_move\":{\"x\":1,\"y\":0},\"metadata\":{\"player_opposing\":{\"avatar\":\"\",\"chess_type\":-1,\"name\":\"Player2\",\"type\":1},\"player_our\":{\"avatar\":\"\",\"chess_type\":1,\"name\":\"Player1\",\"type\":0},\"size\":9,\"turn_timeout\":30},\"move_count\":4,\"now_playing\":1,\"should_giveup\":false,\"start_time\":{TIMESTAMP},\"statistics\":[]},\"game_result\":{\"win_type\":2,\"winner\":1},\"is_gaming\":false,\"status\":2}","op":100001})" },
     {},
     { R"({"data1":"Player2","data2":"","op":200007})" },
 };
@@ -171,10 +200,6 @@ const vector<vector<string>> recv_msgs2 {
     {},
     {},
 };
-
-#include <errno.h>
-#include <stdio.h>
-#include <stdlib.h>
 
 TEST(nogo, server)
 {
@@ -209,52 +234,13 @@ TEST(nogo, server)
         } catch (const std::exception& e) {
             FAIL() << e.what();
         }
-
         // fmt::print("\033[32mrecv_msg2: {}\033[0m\n", recv_msg2);
 
-        constexpr string_view placeholder = "{TIMEOUT}";
-        constexpr auto timestamp_len = 13;
         for (auto [msg, expect] : ranges::views::zip(recv_msg1, recv_msgs1[i])) {
-            auto expect_s = expect | ranges::views::split(placeholder) | ranges::to<vector<string>>();
-            auto expect_msg_length = expect.size() - (expect_s.size() - 1) * placeholder.size() + (expect_s.size() - 1) * timestamp_len;
-            bool match = msg.size() == expect_msg_length;
-            if (match) {
-                if (expect_s.size() == 1) {
-                    match = msg == expect;
-                } else {
-                    auto msg_s = expect_s | ranges::views::transform([&](auto& s) {
-                        auto pos = expect.find(s);
-                        auto index = std::find(expect_s.begin(), expect_s.end(), s) - expect_s.begin();
-                        if (pos == 0)
-                            return msg.substr(0, s.size());
-                        auto actual_pos = pos + (timestamp_len - placeholder.size()) * index;
-                        return msg.substr(actual_pos, s.size());
-                    }) | ranges::to<vector<string>>();
-                    match = ranges::equal(msg_s, expect_s);
-                }
-            }
-            EXPECT_TRUE(match) << "message not match in round " << i + 1 << "!\nreceived message: " << msg << "\nexpected message: " << expect;
+            EXPECT_EQ(msg, expect) << "message not match in round " << i + 1;
         }
         for (auto [msg, expect] : ranges::views::zip(recv_msg2, recv_msgs2[i])) {
-            auto expect_s = expect | ranges::views::split(placeholder) | ranges::to<vector<string>>();
-            auto expect_msg_length = expect.size() - (expect_s.size() - 1) * placeholder.size() + (expect_s.size() - 1) * timestamp_len;
-            bool match = msg.size() == expect_msg_length;
-            if (match) {
-                if (expect_s.size() == 1) {
-                    match = msg == expect;
-                } else {
-                    auto msg_s = expect_s | ranges::views::transform([&](auto& s) {
-                        auto pos = expect.find(s);
-                        auto index = std::find(expect_s.begin(), expect_s.end(), s) - expect_s.begin();
-                        if (pos == 0)
-                            return msg.substr(0, s.size());
-                        auto actual_pos = pos + (timestamp_len - placeholder.size()) * index;
-                        return msg.substr(actual_pos, s.size());
-                    }) | ranges::to<vector<string>>();
-                    match = ranges::equal(msg_s, expect_s);
-                }
-            }
-            EXPECT_TRUE(match) << "message not match in round " << i + 1 << "!\nreceived message: " << msg << "\nexpected message: " << expect;
+            EXPECT_EQ(msg, expect) << "message not match in round " << i + 1;
         }
     }
 }
