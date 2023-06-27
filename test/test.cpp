@@ -118,7 +118,7 @@ auto launch_client(asio::io_context& io_context, string_view ip, string_view por
 }
 
 struct MessageFormat {
-    string format;
+    string_view format;
     static constexpr auto placeholder { "{TIMESTAMP}"sv };
     static constexpr auto timestamp_len { 13 };
     constexpr MessageFormat(const char* format)
