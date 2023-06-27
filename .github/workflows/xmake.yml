@@ -73,7 +73,9 @@ jobs:
         with:
           xmake-version: latest
       - name: Build
-        run: xmake -y
+        run: |
+          xmake f --toolchain=gcc-12 -c --ldflags="-static" -y
+          xmake -y
       - name: Upload artifact
         uses: actions/upload-artifact@v3
         with:
